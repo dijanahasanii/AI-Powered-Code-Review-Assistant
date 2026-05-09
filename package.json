@@ -1,0 +1,17 @@
+{
+  "name": "ai-code-review-assistant",
+  "version": "1.0.0",
+  "description": "AI-Powered Code Review Assistant — Bachelor Thesis Project",
+  "private": true,
+  "scripts": {
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "install:all": "cd backend && npm install && cd ../frontend && npm install",
+    "test:backend": "cd backend && npm test",
+    "build:frontend": "cd frontend && npm run build"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

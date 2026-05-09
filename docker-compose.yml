@@ -1,0 +1,80 @@
+version: '3.9'
+
+services:
+  # ── PostgreSQL (local dev — use Supabase in production) ───────────────────
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: code_review_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/src/config/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ── Redis (for Bull job queue) ────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ── Backend ───────────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - '3001:3001'
+    environment:
+      - NODE_ENV=development
+      - PORT=3001
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/code_review_db
+      - REDIS_URL=redis://redis:6379
+    env_file:
+      - ./backend/.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    command: npm run dev
+
+  # ── Frontend ──────────────────────────────────────────────────────────────
+  # Dev stack: overrides below run Vite on :5173. The Dockerfile multi-stage builds Nginx (:80)
+  # proxying `/api` + `/socket.io` → `backend`; for that production image, omit VITE_* and publish :80.
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - '5173:5173'
+    environment:
+      - VITE_API_URL=http://localhost:3001
+      - VITE_WS_URL=http://localhost:3001
+    env_file:
+      - ./frontend/.env
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    command: npm run dev -- --host
+
+volumes:
+  postgres_data:
+  redis_data:

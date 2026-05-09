@@ -1,0 +1,61 @@
+'use strict';
+
+/** Max bytes per file before we skip (GitHub blobs + decode buffer guard). */
+const MAX_FILE_BYTES = 320_000;
+
+const ALLOW_EXTENSIONS = new Set(['.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx', '.vue']);
+
+const IGNORE_SEGMENT = new Set([
+  'node_modules',
+  '.git',
+  'dist',
+  'build',
+  '.next',
+  'out',
+  'coverage',
+  '.nuxt',
+  'storybook-static',
+  '__pycache__',
+  '.venv',
+  'venv',
+  'vendor',
+  'target',
+  'Pods',
+  '.gradle',
+  'bower_components',
+  '.turbo',
+  '.parcel-cache',
+]);
+
+function shouldScanPath(repoPath, sizeBytes) {
+  if (!repoPath || typeof repoPath !== 'string') return false;
+  if (repoPath.length > 240) return false;
+
+  const lower = repoPath.toLowerCase();
+  const parts = repoPath.split('/');
+
+  const base = parts[parts.length - 1] || '';
+  if (base.startsWith('.') && base !== '.eslintrc.js') return false;
+
+  for (const seg of parts) {
+    if (IGNORE_SEGMENT.has(seg)) return false;
+  }
+
+  if (/\.(min|bundle)\.(js|mjs|cjs)$/i.test(lower)) return false;
+  if (/\.d\.ts$/.test(lower)) return false;
+  if (/\.(map|lock|snap)$/i.test(lower)) return false;
+
+  const dot = repoPath.lastIndexOf('.');
+  const ext = dot >= 0 ? repoPath.slice(dot) : '';
+  if (!ALLOW_EXTENSIONS.has(ext)) return false;
+
+  if (sizeBytes != null && Number(sizeBytes) > MAX_FILE_BYTES) return false;
+
+  return true;
+}
+
+module.exports = {
+  MAX_FILE_BYTES,
+  shouldScanPath,
+  ALLOW_EXTENSIONS,
+};

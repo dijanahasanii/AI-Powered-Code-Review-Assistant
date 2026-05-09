@@ -1,0 +1,705 @@
+# AI-Powered Code Review Assistant
+
+> Bachelor Thesis Project — Full-Stack Web Application  
+> AI-driven automated code analysis with GitHub integration and real-time dashboard
+
+---
+
+## Table of Contents
+
+1. [Project Overview](#1-project-overview)
+2. [System Architecture](#2-system-architecture)
+3. [Database Design & Justification](#3-database-design--justification)
+4. [Backend Design](#4-backend-design-nodejs)
+5. [Frontend Design](#5-frontend-design-react)
+6. [AI Prompt Engineering](#6-ai-prompt-engineering)
+7. [GitHub Integration](#7-github-integration)
+8. [Real-time Features](#8-real-time-features)
+9. [Development Phases](#9-development-phases--roadmap)
+10. [Testing Strategy](#10-testing-strategy)
+11. [Deployment Strategy](#11-deployment-strategy)
+12. [Risks & Challenges](#12-risks--challenges)
+13. [End-to-End Flow Summary](#13-end-to-end-flow-summary)
+14. [Quick Start](#14-quick-start)
+
+---
+
+## 1. Project Overview
+
+### What the system does
+
+The AI-Powered Code Review Assistant automatically analyzes source code whenever a developer pushes commits or opens a pull request on GitHub. It uses the OpenAI API (GPT-4o) to detect bugs, security vulnerabilities, performance issues, and style problems. The results are displayed in a React dashboard with real-time updates via WebSockets.
+
+### Problem it solves
+
+Manual code review is time-consuming and inconsistent. Junior developers often miss subtle bugs; senior developers are overloaded with review requests. This system provides an always-available, objective first-pass review that:
+
+- Catches common bugs and security issues instantly
+- Frees senior engineers from repetitive low-level feedback
+- Provides a quantitative quality score per commit
+- Creates a historical record of code quality over time
+
+### Real-world use cases
+
+- **Solo developers**: Get automated feedback on every commit without needing a reviewer
+- **Small teams**: Supplement human reviews with AI pre-screening to surface issues before human review
+- **Open-source projects**: Automatically comment on incoming PRs with an initial quality assessment
+- **Student projects**: Instant educational feedback on code quality and best practices
+- **CI/CD pipelines**: Block merges if the AI score drops below a threshold
+
+---
+
+## 2. System Architecture
+
+### High-level overview
+
+```
+GitHub (push event)
+       │
+       │ POST /api/webhooks/github
+       ▼
+┌──────────────────────────────────────────────────────┐
+│                  Node.js Backend (Express)            │
+│                                                      │
+│  ┌──────────┐  ┌─────────────┐  ┌─────────────────┐ │
+│  │  Auth    │  │  REST API   │  │ Webhook Handler  │ │
+│  │  (JWT)   │  │  Routes     │  │ (sig verify)     │ │
+│  └──────────┘  └─────────────┘  └────────┬────────┘ │
+│                                          │           │
+│  ┌────────────────────────────────────────▼────────┐ │
+│  │            Bull Job Queue (Redis)               │ │
+│  └────────────────────────────────────────┬────────┘ │
+│                                           │          │
+│  ┌────────────────────────────────────────▼────────┐ │
+│  │               Queue Worker                     │ │
+│  │  1. Fetch diff (GitHub API)                    │ │
+│  │  2. Build prompt + call OpenAI                 │ │
+│  │  3. Parse + store results (Supabase)           │ │
+│  │  4. Emit WebSocket event                       │ │
+│  └────────────────────────────────────────────────┘ │
+└──────────────────────────────────────────────────────┘
+       │                    │                │
+  OpenAI API          Supabase DB      Socket.io
+  (GPT-4o)          (PostgreSQL)    (Real-time WS)
+                                          │
+                                          ▼
+                           ┌─────────────────────────┐
+                           │    React Dashboard       │
+                           │  (Vite + Tailwind CSS)   │
+                           └─────────────────────────┘
+```
+
+### How components interact
+
+1. **GitHub** sends webhook POST requests to the backend whenever code is pushed
+2. **Backend** verifies the webhook signature, creates a review record, and adds a job to the Redis queue
+3. **Queue Worker** picks up the job, fetches the git diff via GitHub API, builds an AI prompt, calls OpenAI, parses the structured JSON response, and saves results to Supabase
+4. **Socket.io** pushes a `review:update` event to the React dashboard in real time
+5. **React Dashboard** updates the UI immediately without requiring a page refresh
+
+---
+
+## 3. Database Design & Justification
+
+### Why Supabase (PostgreSQL)?
+
+**vs MongoDB**: Code reviews have clear relational structure (users → repos → reviews → issues). SQL joins make it trivial to query "all critical issues across all reviews for user X". MongoDB would require complex aggregations for the same query.
+
+**vs plain PostgreSQL**: Supabase provides PostgreSQL + a REST API + built-in auth + Row Level Security + a hosted managed instance with a free tier — removing infrastructure burden during development. You can also migrate to a self-hosted PostgreSQL later by only changing connection strings.
+
+**vs Firebase**: Supabase is open-source, SQL-based, and doesn't lock you into a proprietary query language. Better for academic work where you need to reason about data structures formally.
+
+### Schema
+
+```
+users
+├── id (UUID PK)
+├── github_id (BIGINT UNIQUE)
+├── username, email, avatar_url
+├── access_token (encrypted GitHub OAuth token)
+└── created_at, updated_at
+
+repositories
+├── id (UUID PK)
+├── user_id (FK → users)
+├── github_repo_id (BIGINT UNIQUE)
+├── full_name, name, description, language
+├── is_private, webhook_id, webhook_active
+└── created_at, updated_at
+
+code_reviews
+├── id (UUID PK)
+├── repository_id (FK → repositories)
+├── commit_sha (VARCHAR 40)
+├── branch, pr_number, author
+├── status (pending | processing | completed | failed)
+├── triggered_by (webhook | manual)
+├── summary (AI-generated text)
+├── overall_score (0-100)
+└── created_at, completed_at
+
+review_issues
+├── id (UUID PK)
+├── review_id (FK → code_reviews)
+├── file_path, line_number
+├── severity (critical | warning | info | suggestion)
+├── category (bug | security | performance | style | maintainability)
+├── title, description, suggestion
+└── created_at
+
+review_file_stats
+├── id (UUID PK)
+├── review_id (FK → code_reviews)
+├── file_path
+└── additions, deletions, issues_count
+```
+
+### Relationships
+
+- One **user** has many **repositories** (one-to-many)
+- One **repository** has many **code reviews** (one-to-many)
+- One **code review** has many **review issues** (one-to-many)
+- One **code review** has many **file stats** (one-to-many)
+
+---
+
+## 4. Backend Design (Node.js)
+
+### Folder structure
+
+```
+backend/
+├── src/
+│   ├── server.js              # Express app + Socket.io setup
+│   ├── config/
+│   │   ├── database.js        # Supabase client
+│   │   └── schema.sql         # Database DDL
+│   ├── controllers/
+│   │   ├── authController.js  # GitHub OAuth flow
+│   │   ├── reposController.js # CRUD for repositories
+│   │   ├── reviewsController.js
+│   │   └── webhookController.js
+│   ├── middleware/
+│   │   ├── auth.js            # JWT verification
+│   │   ├── errorHandler.js    # Global error handler
+│   │   └── rateLimiter.js     # express-rate-limit
+│   ├── routes/
+│   │   ├── auth.js
+│   │   ├── repos.js
+│   │   ├── reviews.js
+│   │   └── webhooks.js
+│   ├── services/
+│   │   ├── openaiService.js   # Prompt + parse AI response
+│   │   ├── githubService.js   # Fetch diffs, post PR comments
+│   │   ├── reviewQueue.js     # Bull queue instance
+│   │   └── queueWorker.js     # Processes review jobs
+│   └── utils/
+│       └── logger.js          # Winston logger
+└── package.json
+```
+
+### API routes
+
+| Method | Route | Auth | Description |
+|--------|-------|------|-------------|
+| GET | `/api/auth/github` | — | Redirect to GitHub OAuth |
+| GET | `/api/auth/github/callback` | — | Exchange code for token |
+| GET | `/api/auth/me` | JWT | Get current user |
+| GET | `/api/repos` | JWT | List connected repos |
+| GET | `/api/repos/github` | JWT | List available GitHub repos |
+| POST | `/api/repos` | JWT | Connect a repository |
+| DELETE | `/api/repos/:id` | JWT | Disconnect a repository |
+| GET | `/api/reviews` | JWT | List reviews (paginated) |
+| GET | `/api/reviews/stats` | JWT | Dashboard statistics |
+| GET | `/api/reviews/:id` | JWT | Full review with issues |
+| POST | `/api/reviews/trigger` | JWT | Manual review trigger |
+| POST | `/api/webhooks/github` | Sig | GitHub webhook receiver |
+
+### Authentication
+
+Uses GitHub OAuth 2.0 for login. After OAuth, the backend issues its own JWT (7-day expiry). The JWT is stored in `localStorage` on the frontend and sent as a `Bearer` token on every request. The `authenticate` middleware verifies the JWT and fetches the user from the database.
+
+### Error handling strategy
+
+A centralized `errorHandler` middleware catches all errors. It:
+- Logs 5xx errors with stack traces (never in production responses)
+- Maps known error codes (PostgreSQL constraint violations, JWT errors) to appropriate HTTP status codes
+- Uses a custom `AppError` class for operational errors (validation, not found, etc.)
+- Returns clean JSON error responses in a consistent `{ success: false, error: "..." }` shape
+
+---
+
+## 5. Frontend Design (React)
+
+### Folder structure
+
+```
+frontend/src/
+├── api/
+│   └── client.js        # Axios instance + all API functions
+├── components/
+│   └── common/
+│       ├── Layout.jsx   # Sidebar + Outlet wrapper
+│       └── UI.jsx       # Reusable: Badge, Spinner, ScoreRing, etc.
+├── context/
+│   ├── AuthContext.jsx  # Global auth state + login/logout
+│   └── SocketContext.jsx# WebSocket connection + helpers
+├── pages/
+│   ├── LoginPage.jsx
+│   ├── CallbackPage.jsx
+│   ├── DashboardPage.jsx
+│   ├── RepositoriesPage.jsx
+│   ├── ReviewsPage.jsx
+│   └── ReviewDetailPage.jsx
+├── App.jsx              # Router + route protection
+├── main.jsx             # React entry point + QueryClient
+└── index.css            # Tailwind + global styles
+```
+
+### State management approach
+
+**React Query** (`@tanstack/react-query`) handles all server state:
+- Automatic caching, background refetching, and stale-while-revalidate behavior
+- Mutation handling with `useMutation` for POST/DELETE operations
+- Cache invalidation after mutations to keep UI in sync
+- No Redux or Zustand needed — server state and minimal local state with `useState` is sufficient for this app
+
+**Context API** for:
+- `AuthContext` — user identity, token management
+- `SocketContext` — WebSocket instance shared across the component tree
+
+### Dashboard layout
+
+```
+┌─────────────────────────────────────────────────────┐
+│  Sidebar (fixed)    │  Main content area            │
+│                     │                               │
+│  [AI] Code Review   │  Dashboard                    │
+│                     │  ┌──────┬──────┬──────┬──────┐│
+│  ◈ Dashboard        │  │Total │Done  │Active│Score ││
+│  ◈ Repositories     │  └──────┴──────┴──────┴──────┘│
+│  ◈ Reviews          │  ┌──────────┬────────────────┐ │
+│                     │  │ Bar chart│ Recent reviews │ │
+│  ● Live updates on  │  │ (issues) │ (list)         │ │
+│  [avatar] logout    │  └──────────┴────────────────┘ │
+└─────────────────────────────────────────────────────┘
+```
+
+---
+
+## 6. AI Prompt Engineering
+
+### System prompt design
+
+The system prompt instructs GPT-4o to:
+1. Act as a **senior software engineer** doing a code review
+2. Return **only valid JSON** — no markdown, no preamble
+3. Follow an **exact schema** with required fields and constrained enum values
+
+Using `response_format: { type: "json_object" }` in the OpenAI API call enforces JSON-only output at the model level, preventing free-form responses.
+
+### Temperature setting
+
+Temperature is set to `0.2` (low) for code review tasks. This produces:
+- Consistent, structured output across similar inputs
+- Factual and precise technical observations
+- Reproducible results for the same diff
+
+Higher temperatures (0.7+) are appropriate for creative tasks but cause inconsistent severity assignments and schema deviations for analytical tasks.
+
+### Handling inconsistent AI responses
+
+Three layers of defense:
+1. **`response_format: json_object`** — forces JSON at the API level
+2. **`parseAIResponse()`** — strips any accidental markdown fences, then parses and validates
+3. **Field normalization** — any invalid severity/category value is replaced with a safe default instead of throwing
+
+If parsing fails, the job is **retried up to 3 times** with exponential backoff (2s, 4s, 8s). After 3 failures, the review is marked `failed` in the database.
+
+### Diff truncation
+
+Long diffs are truncated to ~20,000 characters to stay within token budget. The truncation tries to cut at a `diff --git` file boundary to avoid mid-file cuts that could confuse the model.
+
+---
+
+## 7. GitHub Integration
+
+### How webhooks work
+
+1. When a user connects a repository, the backend calls `POST /repos/:owner/:repo/hooks` via the GitHub API to install a webhook
+2. GitHub stores the backend URL (`/api/webhooks/github`) and calls it on every `push` and `pull_request` event
+3. Each request includes an `x-hub-signature-256` header — an HMAC-SHA256 signature of the request body using the shared webhook secret
+
+### Security — signature verification
+
+```
+Expected signature = HMAC-SHA256(body, GITHUB_WEBHOOK_SECRET)
+Actual signature   = x-hub-signature-256 header value
+
+crypto.timingSafeEqual(expected, actual)  ← prevents timing attacks
+```
+
+The body must be read as a **raw Buffer** (not parsed JSON) for the HMAC to match. This is why `express.raw()` is applied specifically to the `/api/webhooks` route before the global `express.json()` middleware.
+
+Any request that fails signature verification returns `401` immediately without processing the payload.
+
+### Flow: push → analysis → dashboard
+
+```
+1. Developer pushes code
+2. GitHub calls POST /api/webhooks/github
+3. Backend: verify signature → parse payload → check repo is connected
+4. Backend: create code_review record (status: 'pending')
+5. Backend: add job to Bull queue → immediately return 200 to GitHub
+6. Worker: fetch commit diff from GitHub API
+7. Worker: build prompt with diff + repo context
+8. Worker: call OpenAI API → parse JSON response
+9. Worker: save review_issues + update code_review (status: 'completed', score: X)
+10. Worker: emit 'review:update' via Socket.io
+11. React Dashboard: receives event → invalidates React Query cache → re-renders
+```
+
+Steps 6–11 happen asynchronously in the background. GitHub's webhook system requires a response within 10 seconds — the queue pattern ensures this by immediately returning `200` in step 5.
+
+---
+
+## 8. Real-time Features
+
+### WebSocket architecture
+
+Uses **Socket.io** on the backend and `socket.io-client` on the frontend. Socket.io automatically falls back from WebSockets to HTTP long-polling in restricted network environments.
+
+**Room-based updates**: Each repository has a dedicated room (`repo:{repoId}`). The frontend joins the room for whatever repository it's currently viewing. This prevents broadcasting all reviews to all users.
+
+**Events**:
+- `review:update` — emitted when a review changes status (processing → completed/failed)
+- `join:repo` — sent from client to server to subscribe to a repo's updates
+
+### Live analysis updates
+
+The `ReviewDetailPage` uses two approaches in parallel:
+1. **React Query `refetchInterval`** — polls every 3 seconds when status is `pending` or `processing` (fallback for if WebSocket is unavailable)
+2. **Socket.io event listener** — instantly invalidates the React Query cache when a `review:update` event arrives
+
+This dual approach ensures the UI always updates even if the WebSocket connection drops.
+
+---
+
+## 9. Development Phases & Roadmap
+
+### Phase 1: Project Setup (Days 1–3)
+
+- [ ] Create GitHub repository and project structure
+- [ ] Configure Node.js backend with Express, CORS, Helmet
+- [ ] Set up Supabase project and run schema.sql
+- [ ] Set up React frontend with Vite + Tailwind CSS
+- [ ] Configure `.env` files with all required variables
+- [ ] Set up Redis locally (or use Redis Cloud free tier)
+- [ ] Test: `GET /health` returns 200, frontend loads in browser
+
+### Phase 2: Authentication (Days 4–6)
+
+- [ ] Register a GitHub OAuth App (Settings → Developer settings)
+- [ ] Implement `GET /api/auth/github` redirect
+- [ ] Implement `GET /api/auth/github/callback` — exchange code, create/update user in DB
+- [ ] Implement JWT issuance and `authenticate` middleware
+- [ ] Build `LoginPage` with GitHub button
+- [ ] Build `CallbackPage` that stores JWT and redirects
+- [ ] Test: complete login flow end-to-end in browser
+
+### Phase 3: Repository Management (Days 7–9)
+
+- [ ] Implement `GET /api/repos/github` — list GitHub repos
+- [ ] Implement `POST /api/repos` — connect repo + install webhook
+- [ ] Implement `DELETE /api/repos/:id` — disconnect + remove webhook
+- [ ] Build `RepositoriesPage` with GitHub repo picker
+- [ ] Test: connect a repo, verify webhook appears in GitHub settings
+
+### Phase 4: AI Integration (Days 10–14)
+
+- [ ] Implement `openaiService.js` with prompt engineering
+- [ ] Test prompt with sample diffs using a Node.js script
+- [ ] Implement `githubService.js` — fetch commit diffs
+- [ ] Implement `reviewQueue.js` + `queueWorker.js`
+- [ ] Test: manually trigger a job, verify full analysis pipeline
+- [ ] Test: verify structured JSON is saved to `review_issues` table
+
+### Phase 5: GitHub Webhook Integration (Days 15–17)
+
+- [ ] Implement `webhookController.js` with signature verification
+- [ ] Use `ngrok` to expose localhost for GitHub webhook delivery during dev
+- [ ] Test: push a commit → verify webhook received → review created
+- [ ] Implement `postPRComments` to post feedback back to GitHub PR
+
+### Phase 6: Frontend Dashboard (Days 18–23)
+
+- [ ] Build `Layout.jsx` with sidebar navigation
+- [ ] Build `DashboardPage` with stats cards and recent reviews list
+- [ ] Build `ReviewsPage` with filtering and pagination
+- [ ] Build `ReviewDetailPage` with issues list and score ring
+- [ ] Integrate React Query for all API calls
+- [ ] Integrate Socket.io for real-time updates
+- [ ] Test: complete user flow from login → connect repo → view review
+
+### Phase 7: Testing (Days 24–27)
+
+- [ ] Write unit tests for `openaiService.js` (mock OpenAI)
+- [ ] Write API tests for auth middleware and webhook signature
+- [ ] Write integration tests for review trigger → worker flow
+- [ ] Test edge cases: empty diff, binary files, huge diff, API rate limits
+- [ ] Cross-browser test the dashboard
+
+### Phase 8: Deployment (Days 28–30)
+
+- [ ] Deploy backend to Railway or Render
+- [ ] Deploy frontend to Vercel
+- [ ] Set all production environment variables
+- [ ] Update GitHub OAuth App callback URL to production URL
+- [ ] Update webhook URLs for connected repositories
+- [ ] Smoke test the complete production flow
+
+---
+
+## 10. Testing Strategy
+
+### Unit tests
+
+**`openaiService.test.js`**:
+- Mock the OpenAI client — never call the real API in tests
+- Verify structured output is returned for a sample diff
+- Verify score is clamped to 0–100
+- Verify invalid severity values are normalized
+- Verify retry logic is triggered on rate limit errors
+
+**`webhookController` (in api.test.js)**:
+- Verify requests without a signature return 401
+- Verify requests with an incorrect signature return 401
+- Verify requests with a valid HMAC-SHA256 signature return 200
+
+### API/integration tests
+
+Use `supertest` to test routes against the Express app with a mocked Supabase client:
+- Auth middleware rejects missing/invalid tokens
+- Auth middleware accepts valid JWTs
+- Protected routes return 401 without a token
+- Review list endpoint returns paginated results
+
+### Edge cases to test manually
+
+| Scenario | Expected behavior |
+|----------|------------------|
+| Push with no code changes (only config files) | Review created with "No changes" summary |
+| Push with binary files only (.png, .pdf) | Binary files filtered out, empty diff handled |
+| Diff > 20,000 characters | Diff truncated with note appended |
+| OpenAI returns malformed JSON | Retry up to 3 times, then mark review as failed |
+| GitHub webhook secret mismatch | 401 returned immediately |
+| Duplicate webhook for same commit | Checked before insert, silently ignored |
+| User disconnects repo mid-review | Worker logs warning, review marked failed |
+
+---
+
+## 11. Deployment Strategy
+
+### Frontend — Vercel
+
+Vercel is ideal for React/Vite apps:
+- Auto-deploys from `main` branch on GitHub push
+- Builds with `npm run build`, serves from global CDN
+- Free tier supports custom domains and HTTPS automatically
+
+**Steps**:
+1. `vercel login` then `vercel --prod` in the `frontend/` directory
+2. Set `VITE_API_URL` and `VITE_WS_URL` in Vercel environment variables
+3. All routes → `index.html` via Vercel's SPA rewrite rules
+
+### Backend — Railway
+
+Railway supports Node.js apps with Redis and PostgreSQL add-ons:
+- GitHub integration for automatic deploys
+- Redis add-on available (for Bull queue)
+- Environment variables managed via UI
+- Free tier available; $5/month for always-on
+
+**Alternative**: **Render** (similar, also has a free tier with sleep-on-inactivity).
+
+**Steps**:
+1. Connect GitHub repo in Railway dashboard
+2. Add Redis add-on → `REDIS_URL` set automatically
+3. Set all environment variables from `.env.example`
+4. Set start command: `node src/server.js`
+
+### Database — Supabase
+
+- Managed PostgreSQL with free tier (500MB storage, 2 projects)
+- Run `schema.sql` once in the Supabase SQL editor
+- Use the **service role key** (not anon key) for backend — it bypasses RLS
+- Enable RLS and add policies before going public
+
+### Environment variables handling
+
+**Never commit `.env` files**. Use:
+- `.env.example` as a template (committed to the repo)
+- Platform-specific secret managers (Railway env vars, Vercel env vars, GitHub Secrets for CI)
+- Different values per environment (development, staging, production)
+
+---
+
+## 12. Risks & Challenges
+
+### OpenAI API rate limits
+
+**Risk**: GPT-4o has rate limits (requests per minute, tokens per minute). High push frequency could exhaust limits.
+
+**Mitigations**:
+- Bull queue naturally serializes jobs — no more than `concurrency: 3` workers at once
+- Exponential backoff on `429` responses (2s, 4s, 8s)
+- Diff truncation reduces token usage per request
+- Monitor usage in OpenAI dashboard; upgrade tier if needed
+
+### AI response unpredictability
+
+**Risk**: GPT occasionally deviates from the JSON schema despite `json_object` mode.
+
+**Mitigations**:
+- `response_format: json_object` enforces JSON at API level
+- `parseAIResponse()` normalizes fields to safe defaults
+- 3-attempt retry loop with logging for debugging patterns
+- If all retries fail, review is marked `failed` — doesn't crash the server
+
+### GitHub webhook security
+
+**Risk**: An attacker could forge webhook requests to inject fake reviews.
+
+**Mitigation**: HMAC-SHA256 signature verification using `crypto.timingSafeEqual()` on the raw request body. Requests without a valid signature are rejected with `401` before any DB writes occur.
+
+### Token security
+
+**Risk**: GitHub OAuth tokens stored in the database could be compromised.
+
+**Mitigation**:
+- In production, encrypt the `access_token` column using AES-256 before storing
+- Use HTTPS everywhere (Vercel and Railway enforce this)
+- JWT tokens expire in 7 days and must be refreshed via re-login
+
+### Scalability concerns
+
+**Risk**: As review volume grows, the single Node.js process and queue may become a bottleneck.
+
+**Mitigations**:
+- Bull supports running multiple worker processes — scale horizontally by adding worker instances
+- Supabase PostgreSQL can be upgraded to larger compute tiers
+- Stateless backend design means multiple instances can run behind a load balancer
+- WebSocket rooms prevent broadcasting unnecessary events to all users
+
+---
+
+## 13. End-to-End Flow Summary
+
+Here is the complete journey from a code push to seeing results in the dashboard, in plain English:
+
+1. **Developer pushes code** to a GitHub branch on a connected repository
+2. **GitHub delivers a webhook** POST to `/api/webhooks/github` with the commit details
+3. **Backend verifies the signature** using HMAC-SHA256 to confirm it genuinely came from GitHub
+4. **Backend creates a review record** in the database with `status: pending`, then adds a job to the Redis queue and immediately returns `200 OK` to GitHub
+5. **Queue worker picks up the job** and changes the status to `processing`
+6. **Worker fetches the git diff** for that specific commit from the GitHub API
+7. **Worker builds an AI prompt** containing the diff text and repository context
+8. **OpenAI GPT-4o analyzes the diff** and returns a structured JSON object with a quality score, summary, and list of issues
+9. **Worker saves the results**: updates the review with the score and summary, inserts all issues into `review_issues`
+10. **Worker emits a WebSocket event** (`review:update`) to the relevant Socket.io room
+11. **React Dashboard receives the event** in real time and invalidates the React Query cache
+12. **Dashboard re-renders** showing the completed review with score ring, issues list, file stats, and AI summary
+13. **If it was a PR**, the worker also posts inline comments directly back to the GitHub pull request
+
+The entire pipeline from push to results appearing on the dashboard typically takes **15–30 seconds**.
+
+---
+
+## 14. Quick Start
+
+### Prerequisites
+
+- Node.js ≥ 18
+- Redis (local or cloud)
+- Supabase account (free tier)
+- OpenAI API key
+- GitHub OAuth App
+
+### 1. Clone and install
+
+```bash
+git clone <your-repo-url> ai-code-review
+cd ai-code-review
+npm run install:all
+```
+
+### 2. Configure environment variables
+
+```bash
+# Backend
+cp backend/.env.example backend/.env
+# Edit backend/.env with your values
+
+# Frontend
+cp frontend/.env.example frontend/.env
+# Edit frontend/.env with your values
+```
+
+### 3. Set up the database
+
+Log into Supabase → SQL Editor → paste and run `backend/src/config/schema.sql`
+
+### 4. Start development servers
+
+```bash
+npm run dev
+# Backend runs on :3001
+# Frontend runs on :5173
+```
+
+### 5. Expose backend for GitHub webhooks (development)
+
+```bash
+npx ngrok http 3001
+# Copy the https URL, set as BACKEND_URL in backend/.env
+```
+
+### 6. Register GitHub OAuth App
+
+GitHub → Settings → Developer Settings → OAuth Apps → New  
+- Homepage URL: `http://localhost:5173`
+- Callback URL: `http://localhost:5173/auth/callback`
+
+Copy Client ID and Client Secret to your `.env` files.
+
+---
+
+## Project Structure Overview
+
+```
+ai-code-review/
+├── backend/
+│   ├── src/
+│   │   ├── server.js
+│   │   ├── config/       (database.js, schema.sql)
+│   │   ├── controllers/  (auth, repos, reviews, webhooks)
+│   │   ├── middleware/   (auth, errorHandler, rateLimiter)
+│   │   ├── routes/       (auth, repos, reviews, webhooks)
+│   │   ├── services/     (openai, github, queue, worker)
+│   │   ├── utils/        (logger)
+│   │   └── __tests__/    (api.test.js, openai.test.js)
+│   ├── Dockerfile
+│   └── package.json
+├── frontend/
+│   ├── src/
+│   │   ├── api/          (client.js)
+│   │   ├── components/   (Layout, UI)
+│   │   ├── context/      (AuthContext, SocketContext)
+│   │   └── pages/        (Login, Callback, Dashboard, Repos, Reviews, Detail)
+│   ├── Dockerfile
+│   ├── nginx.conf
+│   └── package.json
+├── docker-compose.yml
+├── package.json
+└── README.md             ← this file
+```
