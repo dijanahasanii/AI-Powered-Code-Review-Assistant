@@ -3,9 +3,10 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { safeDistanceToNow } from '../utils/safeDates';
 import { ClipboardList, GitCommit, ChevronLeft, ChevronRight, GitBranch } from 'lucide-react';
+import clsx from 'clsx';
 import { reviewsApi } from '../api/client';
 import { ScoreRing, StatusBadge, EmptyState, PageHeader } from '../components/common/UI';
-import { ReviewRowSkeleton } from '../components/common/Skeletons';
+import { ReviewCardSkeleton } from '../components/common/Skeletons';
 
 const STATUS_FILTERS = ['all', 'completed', 'processing', 'pending', 'failed'];
 const LIMIT = 15;
@@ -36,41 +37,44 @@ export default function ReviewsPage() {
       : 'Push code to a connected repository or use “Review latest” on Repositories for the default branch.';
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
+    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
       <PageHeader
         title="Reviews"
         description={total > 0 ? `${total} review${total !== 1 ? 's' : ''} total` : 'Browse every queued and completed AI review'}
       />
 
-      <div className="flex gap-1.5 mb-5 flex-wrap" role="group" aria-label="Filter by status">
+      <div className="mb-6 inline-flex flex-wrap gap-1 rounded-md border border-desk-border bg-desk-panel p-1" role="group" aria-label="Filter by status">
         {STATUS_FILTERS.map((s) => (
           <button
             key={s}
             type="button"
             onClick={() => handleStatusChange(s)}
             aria-pressed={status === s}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors duration-150 ${
+            className={clsx(
+              'rounded px-3 py-1.5 text-xs font-medium capitalize transition-colors',
               status === s
-                ? 'bg-brand-600 text-white shadow-sm'
-                : 'bg-gray-800 text-gray-400 hover:text-gray-200 hover:bg-gray-700'
-            }`}
+                ? 'bg-desk-elevated text-gray-900 shadow-sm ring-1 ring-desk-border dark:text-gray-50'
+                : 'text-desk-muted hover:bg-desk-canvas hover:text-gray-800 dark:hover:text-gray-200'
+            )}
           >
-            {s.charAt(0).toUpperCase() + s.slice(1)}
+            {s}
           </button>
         ))}
       </div>
 
       {isError ? (
-        <div className="card p-8 text-center">
-          <p className="text-sm text-red-300 mb-3">Could not load reviews. Check your connection and try again.</p>
-          <button type="button" className="btn-secondary text-xs py-2 px-4" onClick={() => refetch()}>
+        <div className="card p-10 text-center">
+          <p className="mb-3 text-sm text-red-800 dark:text-red-300">
+            Could not load reviews. Check your connection and try again.
+          </p>
+          <button type="button" className="btn-secondary px-4 py-2 text-xs" onClick={() => refetch()}>
             Retry
           </button>
         </div>
       ) : isLoading ? (
-        <div className="card divide-y divide-gray-800">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <ReviewRowSkeleton key={i} />
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <ReviewCardSkeleton key={i} />
           ))}
         </div>
       ) : reviews.length === 0 ? (
@@ -82,53 +86,56 @@ export default function ReviewsPage() {
       ) : (
         <>
           <div
-            className={`card divide-y divide-gray-800 ${
-              isPlaceholderData ? 'opacity-70' : ''
-            } transition-opacity`}
+            className={clsx(
+              'grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3',
+              isPlaceholderData ? 'opacity-70' : '',
+              'transition-opacity'
+            )}
           >
             {reviews.map((review) => (
               <Link
                 key={review.id}
                 to={`/reviews/${review.id}`}
-                className="flex items-center gap-3 sm:gap-4 px-4 sm:px-5 py-4 hover:bg-gray-800/40 transition-colors"
+                className="card card-interactive group flex flex-col p-5"
               >
-                <ScoreRing score={review.overall_score} size={42} />
-
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="flex items-center gap-1.5 text-sm font-mono font-medium text-gray-200">
-                      <GitCommit size={12} className="text-gray-500 shrink-0" aria-hidden="true" />
-                      {review.commit_sha?.slice(0, 7)}
-                    </span>
-                    {review.branch && (
-                      <span className="flex items-center gap-1 text-xs bg-gray-800 text-gray-400 px-1.5 py-0.5 rounded font-mono">
-                        <GitBranch size={10} aria-hidden="true" />
-                        {review.branch}
+                <div className="flex items-start gap-4">
+                  <ScoreRing score={review.overall_score} size={48} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="flex items-center gap-1 font-mono text-[13px] font-semibold text-gray-900 dark:text-gray-100">
+                        <GitCommit size={12} className="text-desk-muted" aria-hidden="true" />
+                        {review.commit_sha?.slice(0, 7)}
                       </span>
+                      <StatusBadge status={review.status} compact />
+                    </div>
+                    <div className="mt-2 flex flex-wrap items-center gap-2 font-mono text-[11px] text-desk-muted">
+                      <span className="truncate">{review.repositories?.full_name}</span>
+                      {review.branch && (
+                        <span className="inline-flex items-center gap-1 rounded border border-desk-border bg-desk-canvas px-1.5 py-0 text-desk-muted">
+                          <GitBranch size={10} aria-hidden="true" />
+                          {review.branch}
+                        </span>
+                      )}
+                    </div>
+                    {review.author && (
+                      <p className="mt-2 truncate text-[11px] text-desk-subtle">{review.author}</p>
                     )}
                     {review.pr_number && (
-                      <span className="text-xs text-brand-400 font-medium">PR #{review.pr_number}</span>
+                      <p className="mt-2 text-[11px] font-medium text-brand-400">PR #{review.pr_number}</p>
                     )}
                   </div>
-                  <p className="text-xs text-gray-500 truncate mt-0.5">
-                    {review.repositories?.full_name}
-                    {review.author ? ` · ${review.author}` : ''}
-                  </p>
                 </div>
-
-                <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-                  <StatusBadge status={review.status} />
-                  <span className="text-xs text-gray-500 hidden sm:block whitespace-nowrap">
-                    {safeDistanceToNow(review.created_at)}
-                  </span>
+                <div className="mt-6 flex items-center justify-between border-t border-desk-border pt-4 text-[11px] text-gray-600 dark:text-desk-subtle">
+                  <span>Open analysis</span>
+                  <span className="tabular-nums">{safeDistanceToNow(review.created_at)}</span>
                 </div>
               </Link>
             ))}
           </div>
 
           {totalPages > 1 && (
-            <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 mt-4">
-              <span className="text-xs text-gray-500">
+            <div className="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <span className="text-xs text-desk-muted">
                 Page {page} of {totalPages} · {total} reviews
               </span>
               <div className="flex gap-2">
@@ -137,7 +144,7 @@ export default function ReviewsPage() {
                   disabled={page === 1}
                   onClick={() => setPage((p) => p - 1)}
                   aria-label="Previous page"
-                  className="btn-secondary py-1.5 px-3 disabled:opacity-40"
+                  className="btn-secondary p-2 disabled:opacity-40"
                 >
                   <ChevronLeft size={14} aria-hidden="true" />
                 </button>
@@ -146,7 +153,7 @@ export default function ReviewsPage() {
                   disabled={page >= totalPages}
                   onClick={() => setPage((p) => p + 1)}
                   aria-label="Next page"
-                  className="btn-secondary py-1.5 px-3 disabled:opacity-40"
+                  className="btn-secondary p-2 disabled:opacity-40"
                 >
                   <ChevronRight size={14} aria-hidden="true" />
                 </button>

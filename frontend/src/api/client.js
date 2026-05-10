@@ -51,6 +51,7 @@ export const reposApi = {
   listGithub: () => api.get('/api/repos/github'),
   connect: (data) => api.post('/api/repos', data),
   disconnect: (id) => api.delete(`/api/repos/${id}`),
+  syncWebhook: (id) => api.post(`/api/repos/${id}/sync-webhook`),
 };
 
 export const reviewsApi = {

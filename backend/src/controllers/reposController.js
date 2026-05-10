@@ -24,6 +24,77 @@ const getUserToken = async (userId) => {
 };
 
 /**
+ * Turn Octokit webhook errors into something users can act on (404 is often "wrong account / no admin").
+ */
+function formatWebhookFailureMessage(fullName, err) {
+  const status = err?.status;
+  const raw = typeof err?.message === 'string' ? err.message : String(err);
+
+  if (status === 404) {
+    return (
+      `GitHub returned 404 for "${fullName}". Usually: the repo was renamed/deleted, or your logged-in GitHub user ` +
+      `cannot administer webhooks there (need owner or admin — collaborators without admin cannot install hooks). ` +
+      `Disconnect repos you only have read access to (e.g. a coworker's repo) and use "Install webhook" on repos you control.`
+    );
+  }
+  if (status === 403) {
+    return `GitHub denied webhook access for "${fullName}". You need admin rights on that repository. ${raw}`;
+  }
+  return raw.replace(/\s+-\s+https:\/\/docs\.github\.com\/[^\s]+$/i, '').trim() || raw;
+}
+
+/**
+ * Register push/PR webhook on GitHub for this repo URL.
+ * Optionally removes a previous hook id (stale tunnel / reconnect).
+ * @returns {{ webhookId: number|null, reason?: string }}
+ */
+async function installGithubPushWebhook(octokit, fullName, { previousHookId } = {}) {
+  const backendBase = (process.env.BACKEND_URL || '').replace(/\/+$/, '');
+  const secret = process.env.GITHUB_WEBHOOK_SECRET;
+  const [owner, repoName] = fullName.split('/');
+
+  if (!backendBase || backendBase.includes('your-backend')) {
+    logger.warn(
+      '[repos] BACKEND_URL missing or placeholder — webhook not registered. Use a PUBLIC https URL (e.g. ngrok).'
+    );
+    return { webhookId: null, reason: 'BACKEND_URL is not set or is still a placeholder' };
+  }
+  if (!secret) {
+    logger.warn('[repos] GITHUB_WEBHOOK_SECRET missing — webhook not registered.');
+    return { webhookId: null, reason: 'GITHUB_WEBHOOK_SECRET is not set in backend/.env' };
+  }
+
+  if (previousHookId) {
+    try {
+      await octokit.repos.deleteWebhook({ owner, repo: repoName, hook_id: previousHookId });
+      logger.info(`[repos] Removed previous webhook ${previousHookId} on ${fullName}`);
+    } catch (e) {
+      logger.warn(`[repos] Could not remove webhook ${previousHookId}: ${e.message}`);
+    }
+  }
+
+  try {
+    const { data: hook } = await octokit.repos.createWebhook({
+      owner,
+      repo: repoName,
+      config: {
+        url: `${backendBase}/api/webhooks/github`,
+        content_type: 'json',
+        secret,
+      },
+      events: ['push', 'pull_request'],
+      active: true,
+    });
+    logger.info(`Webhook installed on ${fullName}: ${backendBase}/api/webhooks/github`);
+    return { webhookId: hook.id };
+  } catch (hookErr) {
+    const reason = formatWebhookFailureMessage(fullName, hookErr);
+    logger.warn(`Could not install webhook for ${fullName}: ${reason}`);
+    return { webhookId: null, reason };
+  }
+}
+
+/**
  * GET /api/repos
  * List repositories the user has connected
  */
@@ -101,40 +172,9 @@ const connectRepo = async (req, res, next) => {
 
     if (existing) throw new AppError('Repository already connected', 409);
 
-    // Install GitHub webhook
     const token = await getUserToken(req.user.id);
     const octokit = getOctokit(token);
-    const [owner, repo] = fullName.split('/');
-
-    let webhookId = null;
-    const backendBase = (process.env.BACKEND_URL || '').replace(/\/+$/, '');
-    const secret = process.env.GITHUB_WEBHOOK_SECRET;
-
-    if (!backendBase || backendBase.includes('your-backend')) {
-      logger.warn(
-        `[repos] BACKEND_URL is missing or placeholder — webhook not registered. Add a PUBLIC HTTPS URL (e.g. ngrok) to .env, then reconnect the repo.`
-      );
-    } else if (!secret) {
-      logger.warn('[repos] GITHUB_WEBHOOK_SECRET missing — webhook not registered.');
-    } else {
-      try {
-        const { data: hook } = await octokit.repos.createWebhook({
-          owner,
-          repo,
-          config: {
-            url: `${backendBase}/api/webhooks/github`,
-            content_type: 'json',
-            secret,
-          },
-          events: ['push', 'pull_request'],
-          active: true,
-        });
-        webhookId = hook.id;
-        logger.info(`Webhook installed on ${fullName}: ${backendBase}/api/webhooks/github`);
-      } catch (hookErr) {
-        logger.warn(`Could not install webhook for ${fullName}: ${hookErr.message}`);
-      }
-    }
+    const { webhookId } = await installGithubPushWebhook(octokit, fullName, { previousHookId: null });
 
     // Save to database
     const { data: newRepo, error } = await supabase
@@ -178,7 +218,7 @@ const disconnectRepo = async (req, res, next) => {
 
     if (error || !repo) throw new AppError('Repository not found', 404);
 
-    // Remove GitHub webhook
+    // Remove GitHub webhook (best-effort — still remove DB row if GitHub 404)
     if (repo.webhook_id) {
       const token = await getUserToken(req.user.id);
       const octokit = getOctokit(token);
@@ -190,7 +230,18 @@ const disconnectRepo = async (req, res, next) => {
       }
     }
 
-    await supabase.from('repositories').delete().eq('id', id);
+    // Remove reviews first (handles DBs missing ON DELETE CASCADE on older migrations)
+    const { error: revDelErr } = await supabase.from('code_reviews').delete().eq('repository_id', id);
+    if (revDelErr) {
+      logger.error(`[repos] delete code_reviews for repo ${id}:`, revDelErr);
+      throw new AppError(`Could not remove reviews for this repository: ${revDelErr.message}`, 500);
+    }
+
+    const { error: delErr } = await supabase.from('repositories').delete().eq('id', id);
+    if (delErr) {
+      logger.error(`[repos] delete repository ${id}:`, delErr);
+      throw new AppError(`Could not disconnect repository: ${delErr.message}`, 500);
+    }
 
     res.json({ success: true, message: 'Repository disconnected' });
   } catch (err) {
@@ -198,4 +249,55 @@ const disconnectRepo = async (req, res, next) => {
   }
 };
 
-module.exports = { listRepos, listGithubRepos, connectRepo, disconnectRepo };
+/**
+ * POST /api/repos/:id/sync-webhook
+ * Re-install GitHub webhook from current BACKEND_URL (no disconnect).
+ */
+const syncRepoWebhook = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const { data: repo, error } = await supabase
+      .from('repositories')
+      .select('*')
+      .eq('id', id)
+      .eq('user_id', req.user.id)
+      .single();
+
+    if (error || !repo) throw new AppError('Repository not found', 404);
+
+    const token = await getUserToken(req.user.id);
+    const octokit = getOctokit(token);
+
+    const { webhookId, reason } = await installGithubPushWebhook(octokit, repo.full_name, {
+      previousHookId: repo.webhook_id || null,
+    });
+
+    const { data: updated, error: updErr } = await supabase
+      .from('repositories')
+      .update({
+        webhook_id: webhookId,
+        webhook_active: !!webhookId,
+      })
+      .eq('id', id)
+      .eq('user_id', req.user.id)
+      .select('id, full_name, webhook_id, webhook_active')
+      .single();
+
+    if (updErr) throw new AppError('Could not update repository', 500);
+
+    if (!webhookId) {
+      throw new AppError(
+        reason ||
+          'Could not register GitHub webhook. Check BACKEND_URL (public HTTPS, ngrok running), GITHUB_WEBHOOK_SECRET, and GitHub permissions.',
+        422
+      );
+    }
+
+    res.json({ success: true, data: updated });
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { listRepos, listGithubRepos, connectRepo, disconnectRepo, syncRepoWebhook };

@@ -62,11 +62,11 @@ export default function ConfirmDialog({
             />
           </div>
           <div>
-            <h2 id="dialog-title" className="text-sm font-semibold text-gray-100">
+            <h2 id="dialog-title" className="text-sm font-semibold text-gray-900 dark:text-gray-100">
               {title}
             </h2>
             {message && (
-              <p className="text-xs text-gray-400 mt-1 leading-relaxed">{message}</p>
+              <p className="mt-1 text-xs leading-relaxed text-gray-600 dark:text-gray-400">{message}</p>
             )}
           </div>
         </div>

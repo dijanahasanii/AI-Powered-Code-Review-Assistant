@@ -90,7 +90,19 @@ function attachBullProcessor() {
 const throwIfDbError = (ctx, error) => {
   if (error) {
     logger.error(`${ctx}: ${error.message}`, { code: error.code, details: error.details });
-    throw new Error(`${ctx}: ${error.message}`);
+    let msg = error.message || String(error);
+    // Supabase REST uses fetch under the hood — "fetch failed" is almost always connectivity, not your diff.
+    if (
+      /fetch failed|failed to fetch|network|ECONNREFUSED|ENOTFOUND|ETIMEDOUT|ECONNRESET|certificate|SSL|TLS/i.test(
+        msg
+      )
+    ) {
+      msg =
+        `Cannot reach Supabase over HTTPS. Check: PC is online; no firewall/VPN blocking outbound HTTPS; ` +
+        `backend/.env has correct SUPABASE_URL (https://xxxx.supabase.co, no /rest/v1) and SUPABASE_SERVICE_KEY; ` +
+        `Supabase dashboard shows the project is not paused. Underlying: ${msg}`;
+    }
+    throw new Error(`${ctx}: ${msg}`);
   }
 };
 

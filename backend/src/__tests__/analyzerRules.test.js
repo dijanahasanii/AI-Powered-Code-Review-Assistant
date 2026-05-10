@@ -21,6 +21,27 @@ describe('Repository static rule engine', () => {
     expect(issues.some((x) => x.severity === 'critical')).toBe(true);
   });
 
+  it('large repos with different weighted mass keep distinct numeric scores', () => {
+    const medPalLike = [];
+    let i = 0;
+    for (; i < 214; i++) medPalLike.push({ severity: 'suggestion', filePath: `a-${i}.js` });
+    for (; i < 234; i++) medPalLike.push({ severity: 'warning', filePath: `a-${i}.js` });
+    for (; i < 246; i++) medPalLike.push({ severity: 'info', filePath: `a-${i}.js` });
+
+    const travelBlogLike = [];
+    i = 0;
+    for (; i < 3; i++) travelBlogLike.push({ severity: 'critical', filePath: `b-${i}.js` });
+    for (; i < 25; i++) travelBlogLike.push({ severity: 'warning', filePath: `b-${i}.js` });
+    for (; i < 33; i++) travelBlogLike.push({ severity: 'info', filePath: `b-${i}.js` });
+    for (; i < 81; i++) travelBlogLike.push({ severity: 'suggestion', filePath: `b-${i}.js` });
+
+    const heavy = computeScoreFromIssues(medPalLike);
+    const mixed = computeScoreFromIssues(travelBlogLike);
+    expect(heavy).not.toBe(mixed);
+    expect(Math.abs(mixed - heavy)).toBeGreaterThan(2);
+    expect(mixed).toBeGreaterThan(heavy);
+  });
+
   it('summaries reference concrete stats', () => {
     const files = [{ path: 'frontend/App.tsx', content: 'export const Demo = () => <div />\nconsole.log("x")\n' }];
     const issues = capAndSortIssues(runStaticRulesOnFiles(files));

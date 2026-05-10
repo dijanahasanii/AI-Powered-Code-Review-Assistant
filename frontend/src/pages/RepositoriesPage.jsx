@@ -11,12 +11,64 @@ import {
   Sparkles,
   Search,
   RefreshCw,
+  Activity,
+  AlertOctagon,
 } from 'lucide-react';
+import clsx from 'clsx';
 import { reposApi, reviewsApi } from '../api/client';
 import { Spinner, EmptyState, PageHeader } from '../components/common/UI';
-import { RepoRowSkeleton } from '../components/common/Skeletons';
+import { RepoCardSkeleton } from '../components/common/Skeletons';
 import ConfirmDialog from '../components/common/ConfirmDialog';
 import { useToast } from '../components/common/Toast';
+
+function repoHealthStatus(repo) {
+  const completedReviews = (repo.code_reviews ?? [])
+    .filter((r) => r.status === 'completed')
+    .sort((a, b) => {
+      const tb = new Date(b.created_at ?? 0).getTime();
+      const ta = new Date(a.created_at ?? 0).getTime();
+      return tb - ta;
+    });
+  const latestScore = completedReviews[0]?.overall_score;
+
+  if (!repo.webhook_active) {
+    return {
+      key: 'webhook',
+      label: 'Webhook off',
+      detail: 'Push automation unavailable',
+      className:
+        'border-amber-600/30 bg-amber-500/[0.12] text-amber-950 dark:border-amber-500/35 dark:bg-amber-500/10 dark:text-amber-100',
+      dot: 'bg-amber-500 dark:bg-amber-400',
+    };
+  }
+  if (latestScore != null && latestScore < 70) {
+    return {
+      key: 'findings',
+      label: 'Findings',
+      detail: `Latest score ${latestScore}/100`,
+      className:
+        'border-orange-600/30 bg-orange-500/[0.12] text-orange-950 dark:border-orange-500/35 dark:bg-orange-500/10 dark:text-orange-100',
+      dot: 'bg-orange-600 dark:bg-orange-400',
+    };
+  }
+  if (latestScore != null && latestScore >= 90) {
+    return {
+      key: 'healthy',
+      label: 'Healthy',
+      detail: 'Recent scan looks strong',
+      className:
+        'border-emerald-600/30 bg-emerald-500/[0.14] text-emerald-950 dark:border-emerald-500/35 dark:bg-emerald-500/10 dark:text-emerald-100',
+      dot: 'bg-emerald-600 dark:bg-emerald-400',
+    };
+  }
+  return {
+    key: 'synced',
+    label: 'Synced',
+    detail: 'Webhook active — monitoring pushes',
+    className: 'border-desk-border bg-desk-elevated/60 text-gray-800 dark:text-gray-200',
+    dot: 'bg-[#58a6ff]',
+  };
+}
 
 export default function RepositoriesPage() {
   const queryClient = useQueryClient();
@@ -74,7 +126,7 @@ export default function RepositoriesPage() {
         setReviewHint({
           tone: 'info',
           text:
-            'Webhook was not installed (BACKEND_URL missing or not public). Add your ngrok HTTPS URL to backend .env, restart, disconnect this repo and connect again. Open WEBHOOK_QUICKSTART.md in the project root for step-by-step.',
+            'Webhook did not register on connect — set BACKEND_URL + GITHUB_WEBHOOK_SECRET in backend/.env and click “Install webhook” or “Install webhooks (all)” on Repositories.',
         });
       }
     },
@@ -96,9 +148,60 @@ export default function RepositoriesPage() {
       setReviewHint(null);
     },
     onError: (err) => {
-      const msg = err.response?.data?.error || 'Failed to disconnect repository.';
+      const data = err.response?.data;
+      const msg =
+        (data && typeof data.error === 'string' && data.error) ||
+        (Array.isArray(data?.errors) && data.errors[0]?.msg) ||
+        err.message ||
+        'Failed to disconnect repository.';
       toast.error('Disconnect failed', msg);
-      setConfirmRepo(null);
+    },
+  });
+
+  const syncWebhookMutation = useMutation({
+    mutationFn: (repositoryId) => reposApi.syncWebhook(repositoryId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['repos'] });
+      toast.success('Webhook installed', 'GitHub push events can reach your API for this repo.');
+      setReviewHint(null);
+    },
+    onError: (err) => {
+      toast.error(
+        'Webhook install failed',
+        err.response?.data?.error || err.message || 'Check BACKEND_URL, ngrok, and GITHUB_WEBHOOK_SECRET.'
+      );
+    },
+  });
+
+  const syncAllWebhooksMutation = useMutation({
+    mutationFn: async () => {
+      const repos = await reposApi.list().then((r) => r.data.data ?? []);
+      const targets = repos.filter((x) => !x.webhook_active);
+      let ok = 0;
+      let lastMsg = '';
+      for (const r of targets) {
+        try {
+          await reposApi.syncWebhook(r.id);
+          ok += 1;
+        } catch (e) {
+          lastMsg = e.response?.data?.error || e.message || 'Request failed';
+        }
+      }
+      return { ok, total: targets.length, lastMsg };
+    },
+    onSuccess: ({ ok, total, lastMsg }) => {
+      queryClient.invalidateQueries({ queryKey: ['repos'] });
+      if (total === 0) {
+        toast.success('Already configured', 'Each connected repo reports an active webhook.');
+      } else if (ok === total) {
+        toast.success('Webhooks updated', `${ok} repository webhook${ok !== 1 ? 's' : ''} registered.`);
+        setReviewHint(null);
+      } else {
+        toast.warning(
+          'Some webhooks failed',
+          `${ok}/${total} installed.${lastMsg ? ` Last error: ${lastMsg}` : ''}`
+        );
+      }
     },
   });
 
@@ -145,34 +248,54 @@ export default function RepositoriesPage() {
 
   const anyRepoMissingWebhook = connected.some((r) => !r.webhook_active);
   const busyReviewRepoId = triggerLatestMutation.isPending ? triggerLatestMutation.variables : null;
+  const busySyncWebhookId = syncWebhookMutation.isPending ? syncWebhookMutation.variables : null;
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
+    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
       {anyRepoMissingWebhook && (
-        <div className="mb-4 px-4 py-3 rounded-lg border border-amber-500/35 bg-amber-500/10 text-sm text-amber-100">
-          <p className="font-medium text-amber-50">Push-to-review is off for at least one repo</p>
-          <p className="text-xs text-amber-100/90 mt-1">
-            GitHub needs a public URL to reach your backend. Run ngrok, set{' '}
-            <code className="text-gray-400">BACKEND_URL</code> and{' '}
-            <code className="text-gray-400">GITHUB_WEBHOOK_SECRET</code> in{' '}
-            <code className="text-gray-400">backend/.env</code>, restart the API, then disconnect and reconnect each
-            impacted repo. Follow <strong>WEBHOOK_QUICKSTART.md</strong> inside the workspace.
-          </p>
+        <div className="mb-4 flex flex-col gap-3 rounded-xl border border-amber-500/35 bg-amber-500/10 px-4 py-4 text-sm text-amber-100 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <p className="font-semibold text-amber-50">Push-to-review is off for at least one repo</p>
+            <p className="mt-1 text-xs leading-relaxed text-amber-100/90">
+              Webhooks register when GitHub gets a reachable <strong>BACKEND_URL</strong>, or use the installer below
+              (no disconnect needed). Your tunnel must forward to <strong>the same PORT</strong> as the API (often 3001). See{' '}
+              <strong>WEBHOOK_QUICKSTART.md</strong> at the repo root.
+            </p>
+          </div>
+          <button
+            type="button"
+            className="btn-primary shrink-0 whitespace-nowrap border border-amber-400/35 bg-amber-600 hover:bg-amber-500 text-sm shadow-md"
+            disabled={syncAllWebhooksMutation.isPending || connected.every((r) => r.webhook_active)}
+            onClick={() => syncAllWebhooksMutation.mutate()}
+          >
+            {syncAllWebhooksMutation.isPending ? (
+              <>
+                <Spinner size="sm" />
+                Fixing…
+              </>
+            ) : (
+              <>
+                <RefreshCw size={15} aria-hidden="true" />
+                Install webhooks (all)
+              </>
+            )}
+          </button>
         </div>
       )}
 
       {reviewHint && (
         <div
-          className={`mb-4 px-4 py-3 rounded-lg border text-sm ${
+          className={clsx(
+            'mb-4 rounded-md border px-4 py-3 text-sm',
             reviewHint.tone === 'error'
               ? 'border-red-500/30 bg-red-500/10 text-red-200'
               : reviewHint.tone === 'info'
                 ? 'border-amber-500/30 bg-amber-500/10 text-amber-100'
                 : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-100'
-          }`}
+          )}
         >
           <p>{reviewHint.text}</p>
-          <Link to="/reviews" className="mt-2 inline-block text-xs underline font-medium">
+          <Link to="/reviews" className="mt-2 inline-block text-xs font-medium underline">
             Jump to Reviews
           </Link>
         </div>
@@ -190,13 +313,15 @@ export default function RepositoriesPage() {
       />
 
       {showPicker && (
-        <div className="card mb-6 overflow-hidden">
-          <div className="px-4 sm:px-5 py-4 border-b border-gray-800">
-            <h2 className="text-sm font-semibold text-gray-300 mb-3">Pick a repo from GitHub</h2>
+        <div className="card mb-8 overflow-hidden">
+          <div className="border-b border-desk-border px-4 py-4 sm:px-5">
+            <h2 className="mb-3 text-[13px] font-semibold text-gray-900 dark:text-gray-100">
+              Pick a repo from GitHub
+            </h2>
             <div className="relative">
               <Search
                 size={14}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none"
+                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-desk-muted"
                 aria-hidden="true"
               />
               <input
@@ -205,28 +330,32 @@ export default function RepositoriesPage() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 aria-label="Search GitHub repositories"
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg pl-9 pr-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-brand-500"
+                className="w-full rounded-md border border-desk-border bg-desk-canvas py-2 pl-9 pr-3 text-sm text-gray-900 placeholder-desk-muted focus:border-brand-600/60 focus:outline-none focus:ring-1 focus:ring-brand-600/40 dark:text-gray-200"
               />
             </div>
           </div>
 
           {loadingGithub ? (
-            <div className="flex items-center justify-center py-8 gap-3 text-gray-500 text-sm">
+            <div className="flex items-center justify-center gap-3 py-10 text-sm text-desk-muted">
               <Spinner size="sm" />
               Loading repositories…
             </div>
           ) : githubError ? (
-            <div className="flex flex-col items-center py-8 gap-3 text-center px-4">
+            <div className="flex flex-col items-center gap-3 px-4 py-10 text-center">
               <p className="text-sm text-red-400">Unable to fetch GitHub repositories.</p>
-              <button type="button" onClick={() => refetchGithub()} className="btn-secondary text-xs py-1.5 px-3 inline-flex gap-2">
+              <button
+                type="button"
+                onClick={() => refetchGithub()}
+                className="btn-secondary inline-flex gap-2 px-3 py-1.5 text-xs"
+              >
                 <RefreshCw size={12} aria-hidden="true" />
                 Retry GitHub lookup
               </button>
             </div>
           ) : (
-            <div className="max-h-80 overflow-y-auto divide-y divide-gray-800" role="list">
+            <div className="max-h-80 divide-y divide-desk-border overflow-y-auto" role="list">
               {filtered.length === 0 ? (
-                <p className="text-center text-sm text-gray-500 py-8 px-4">
+                <p className="px-4 py-10 text-center text-sm text-desk-muted">
                   {search ? 'No repos match your search.' : 'No repositories returned for this OAuth token.'}
                 </p>
               ) : (
@@ -238,25 +367,25 @@ export default function RepositoriesPage() {
                     <div
                       key={repo.githubRepoId}
                       role="listitem"
-                      className="flex items-center gap-3 px-4 sm:px-5 py-3 hover:bg-gray-800/30 transition-colors"
+                      className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-desk-elevated/50 sm:px-5"
                     >
                       {repo.isPrivate ? (
-                        <Lock size={13} className="text-gray-500 shrink-0" aria-label="Private" />
+                        <Lock size={13} className="shrink-0 text-desk-muted" aria-label="Private" />
                       ) : (
-                        <Globe size={13} className="text-gray-500 shrink-0" aria-label="Public" />
+                        <Globe size={13} className="shrink-0 text-desk-muted" aria-label="Public" />
                       )}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-200 truncate">{repo.fullName}</p>
-                        {repo.language && <p className="text-xs text-gray-500">{repo.language}</p>}
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-gray-900 dark:text-gray-100">{repo.fullName}</p>
+                        {repo.language && <p className="text-xs text-desk-muted">{repo.language}</p>}
                       </div>
                       {alreadyLinked ? (
-                        <span className="flex items-center gap-1 text-xs text-green-400 shrink-0">
+                        <span className="flex shrink-0 items-center gap-1 text-xs text-emerald-400/95">
                           <CheckCircle2 size={12} aria-hidden="true" /> Connected
                         </span>
                       ) : (
                         <button
                           type="button"
-                          className="btn-secondary text-xs py-1 px-3 shrink-0 min-w-[88px] justify-center inline-flex"
+                          className="btn-secondary inline-flex min-w-[88px] shrink-0 justify-center px-3 py-1 text-xs"
                           onClick={() => connectMutation.mutate(repo)}
                           disabled={busy || connectMutation.isPending}
                           aria-label={`Connect ${repo.fullName}`}
@@ -274,16 +403,16 @@ export default function RepositoriesPage() {
       )}
 
       {reposError ? (
-        <div className="card p-8 text-center">
-          <p className="text-sm text-red-300 mb-3">Could not load connected repositories.</p>
-          <button type="button" className="btn-secondary text-xs py-2 px-4" onClick={() => refetchRepos()}>
+        <div className="card p-10 text-center">
+          <p className="mb-3 text-sm text-red-300">Could not load connected repositories.</p>
+          <button type="button" className="btn-secondary px-4 py-2 text-xs" onClick={() => refetchRepos()}>
             Retry
           </button>
         </div>
       ) : isLoading ? (
-        <div className="space-y-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 3 }).map((_, idx) => (
-            <RepoRowSkeleton key={idx} />
+            <RepoCardSkeleton key={idx} />
           ))}
         </div>
       ) : connected.length === 0 ? (
@@ -299,7 +428,7 @@ export default function RepositoriesPage() {
           }
         />
       ) : (
-        <div className="space-y-2" role="list">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3" role="list">
           {connected.map((repo) => {
             const completedReviews = (repo.code_reviews ?? [])
               .filter((r) => r.status === 'completed')
@@ -309,55 +438,93 @@ export default function RepositoriesPage() {
                 return tb - ta;
               });
             const latestScore = completedReviews[0]?.overall_score;
+            const status = repoHealthStatus(repo);
 
             return (
               <div
                 key={repo.id}
                 role="listitem"
-                className="card px-4 sm:px-5 py-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-4 hover:border-gray-700 transition-colors"
+                className="card card-interactive flex flex-col p-5"
               >
-                <div className="flex flex-1 min-w-0 gap-3 sm:gap-4 sm:items-center">
-                  {repo.is_private ? (
-                    <Lock size={15} className="text-gray-500 shrink-0 mt-1 sm:mt-0" aria-label="Private repository" />
-                  ) : (
-                    <Globe size={15} className="text-gray-500 shrink-0 mt-1 sm:mt-0" aria-label="Public repository" />
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="text-sm font-semibold text-gray-100 break-all">{repo.full_name}</p>
-                      {repo.webhook_active && (
-                        <span className="text-xs bg-green-500/10 text-green-400 border border-green-500/25 px-1.5 py-0.5 rounded-full whitespace-nowrap">
-                          webhook active
+                <div className="flex items-start justify-between gap-3 border-b border-desk-border pb-4">
+                  <div className="flex min-w-0 items-start gap-3">
+                    {repo.is_private ? (
+                      <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-desk-border bg-desk-canvas">
+                        <Lock size={16} className="text-desk-muted" aria-label="Private repository" />
+                      </div>
+                    ) : (
+                      <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-desk-border bg-desk-canvas">
+                        <Globe size={16} className="text-desk-muted" aria-label="Public repository" />
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <p className="break-words font-mono text-[13px] font-semibold leading-snug text-gray-900 dark:text-gray-50">
+                        {repo.full_name}
+                      </p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <span className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium ${status.className}`}>
+                          <span className={`h-1.5 w-1.5 rounded-full ${status.dot}`} aria-hidden="true" />
+                          {status.label}
                         </span>
-                      )}
-                      {!repo.webhook_active && (
-                        <span className="text-xs bg-yellow-500/10 text-yellow-500 border border-yellow-500/25 px-1.5 py-0.5 rounded-full whitespace-nowrap">
-                          no webhook
-                        </span>
-                      )}
+                      </div>
                     </div>
-                    <p className="text-xs text-gray-500 truncate">
-                      {[
-                        repo.language,
-                        `${repo.code_reviews?.length ?? 0} review${repo.code_reviews?.length !== 1 ? 's' : ''}`,
-                        completedReviews.length
-                          ? latestScore != null
-                            ? `Latest score · ${latestScore}/100`
-                            : `Latest · not scored (diff too tiny or empty)`
-                          : null,
-                      ]
-                        .filter(Boolean)
-                        .join(' · ')}
-                    </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 sm:gap-1 justify-end shrink-0">
+
+                <dl className="mt-4 grid gap-3 text-[12px]">
+                  <div className="flex items-start gap-2 text-desk-muted">
+                    <Activity size={14} className="mt-0.5 shrink-0 opacity-70" aria-hidden="true" />
+                    <div>
+                      <dt className="sr-only">Status detail</dt>
+                      <dd className="text-gray-700 dark:text-gray-300">{status.detail}</dd>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-x-3 gap-y-1 font-mono text-[11px] text-desk-muted">
+                    {repo.language && <span className="rounded border border-desk-border bg-desk-canvas px-1.5 py-0">{repo.language}</span>}
+                    <span className="tabular-nums">{repo.code_reviews?.length ?? 0} review runs</span>
+                    {completedReviews.length > 0 &&
+                      (latestScore != null ? (
+                        <span className="tabular-nums text-gray-600 dark:text-gray-400">
+                          Latest {latestScore}/100
+                        </span>
+                      ) : (
+                        <span className="tabular-nums text-gray-600 dark:text-gray-500">Latest · not scored</span>
+                      ))}
+                  </div>
+                </dl>
+
+                {status.key === 'webhook' && (
+                  <>
+                    <p className="mt-4 flex gap-2 rounded-md border border-amber-500/25 bg-amber-500/5 p-3 text-[11px] leading-snug text-amber-950 dark:text-amber-50/95">
+                      <AlertOctagon size={14} className="mt-0.5 shrink-0 opacity-90" aria-hidden="true" />
+                      Use Install webhook once{' '}
+                      <code className="font-mono text-amber-900 dark:text-amber-200/95">BACKEND_URL</code> is public and
+                      ngrok is
+                      running — or disconnect/reconnect after env changes.
+                    </p>
+                    <button
+                      type="button"
+                      className="btn-secondary mt-3 w-full justify-center gap-2 border border-amber-500/30 px-3 py-2 text-xs font-semibold hover:border-amber-400/50"
+                      disabled={busySyncWebhookId === repo.id || syncAllWebhooksMutation.isPending}
+                      onClick={() => syncWebhookMutation.mutate(repo.id)}
+                    >
+                      {busySyncWebhookId === repo.id ? (
+                        <Spinner size="sm" />
+                      ) : (
+                        <RefreshCw size={14} aria-hidden="true" />
+                      )}
+                      Install webhook
+                    </button>
+                  </>
+                )}
+
+                <div className="mt-auto flex gap-2 border-t border-desk-border pt-4">
                   <button
                     type="button"
                     title="Review latest commit on default branch"
                     onClick={() => triggerLatestMutation.mutate(repo.id)}
                     disabled={busyReviewRepoId === repo.id}
-                    className="btn-secondary text-xs py-2 px-3 inline-flex items-center gap-1.5"
+                    className="btn-secondary inline-flex flex-1 items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium"
                   >
                     {busyReviewRepoId === repo.id ? (
                       <Spinner size="sm" />
@@ -371,7 +538,7 @@ export default function RepositoriesPage() {
                     aria-label={`Disconnect ${repo.full_name}`}
                     onClick={() => setConfirmRepo(repo)}
                     disabled={disconnectMutation.isPending}
-                    className="text-gray-600 hover:text-red-400 transition-colors p-2 rounded-lg hover:bg-red-500/10 disabled:opacity-40"
+                    className="rounded-md border border-transparent p-2 text-desk-muted transition-colors hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-300 disabled:opacity-40"
                   >
                     <Trash2 size={15} />
                   </button>

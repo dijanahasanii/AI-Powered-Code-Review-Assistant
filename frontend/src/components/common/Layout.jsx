@@ -1,7 +1,6 @@
-import { useState } from 'react';
-import { Outlet, NavLink, useNavigate } from 'react-router-dom';
+import { useState, useMemo } from 'react';
+import { Outlet, NavLink, useNavigate, Link, useLocation } from 'react-router-dom';
 import {
-  LayoutDashboard,
   GitBranch,
   ClipboardList,
   LogOut,
@@ -9,20 +8,102 @@ import {
   WifiOff,
   Menu,
   X,
+  FlaskConical,
+  Settings,
+  ChevronRight,
+  Sun,
+  Moon,
+  Monitor,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
+import { useUiPreferences } from '../../context/UiPreferencesContext';
 import { Avatar } from './UI';
-const navItems = [
-  { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/repositories', icon: GitBranch, label: 'Repositories' },
-  { to: '/reviews', icon: ClipboardList, label: 'Reviews' },
+
+const navPrimary = [
+  { to: '/dashboard', icon: FlaskConical, label: 'Analysis', end: true },
+  { to: '/repositories', icon: GitBranch, label: 'Repos', end: false },
+  { to: '/reviews', icon: ClipboardList, label: 'Reviews', end: true },
 ];
+
+function useWorkspaceBreadcrumbs() {
+  const { pathname } = useLocation();
+  return useMemo(() => {
+    if (pathname === '/dashboard')
+      return [
+        { label: 'Workspace', to: '/dashboard' },
+        { label: 'Analysis', to: '/dashboard', current: true },
+      ];
+    if (pathname === '/repositories')
+      return [
+        { label: 'Workspace', to: '/dashboard' },
+        { label: 'Repositories', to: '/repositories', current: true },
+      ];
+    if (pathname === '/reviews')
+      return [
+        { label: 'Workspace', to: '/dashboard' },
+        { label: 'Reviews', to: '/reviews', current: true },
+      ];
+    if (/^\/reviews\/[^/]+$/.test(pathname))
+      return [
+        { label: 'Workspace', to: '/dashboard' },
+        { label: 'Reviews', to: '/reviews' },
+        { label: 'Run detail', to: pathname, current: true },
+      ];
+    if (pathname === '/settings')
+      return [
+        { label: 'Workspace', to: '/dashboard' },
+        { label: 'Settings', to: '/settings', current: true },
+      ];
+    return [{ label: 'Workspace', to: '/dashboard', current: true }];
+  }, [pathname]);
+}
+
+function WorkspaceChromeBar() {
+  const crumbs = useWorkspaceBreadcrumbs();
+  const { pathname } = useLocation();
+  const suffix =
+    pathname === '/settings'
+      ? 'preferences'
+      : pathname.startsWith('/reviews/')
+        ? pathname.split('/').pop()?.slice(0, 8) ?? ''
+        : '';
+
+  return (
+    <header
+      role="presentation"
+      className="hidden max-h-[52px] shrink-0 border-b border-desk-border bg-desk-panel/90 px-6 py-3 backdrop-blur-md md:flex md:items-center md:justify-between"
+    >
+      <nav aria-label="Breadcrumbs" className="flex flex-wrap items-center gap-1 text-[13px]">
+        {crumbs.map((c, i) => (
+          <span key={`${c.to}-${i}`} className="flex items-center gap-1 font-medium">
+            {i > 0 && (
+              <ChevronRight size={13} strokeWidth={2} className="text-desk-subtle" aria-hidden="true" />
+            )}
+            {c.current ? (
+              <span className="text-gray-900 dark:text-gray-50">{c.label}</span>
+            ) : (
+              <Link className="text-desk-muted transition-colors hover:text-brand-400" to={c.to}>
+                {c.label}
+              </Link>
+            )}
+          </span>
+        ))}
+      </nav>
+      {suffix ? (
+        <span className="ml-6 hidden max-w-xs truncate rounded-md border border-desk-border bg-desk-canvas px-3 py-1 font-mono text-[11px] text-desk-muted lg:inline-block">
+          {suffix === 'preferences' ? 'Account · appearance · shortcuts' : `id ${suffix}`}
+        </span>
+      ) : null}
+    </header>
+  );
+}
 
 function NavContent({ onNavClick }) {
   const { user, logout } = useAuth();
   const { connected } = useSocket();
+  const { theme, setTheme } = useUiPreferences();
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -30,67 +111,112 @@ function NavContent({ onNavClick }) {
     navigate('/', { replace: true });
   };
 
+  const cycleTheme = () => {
+    const order = ['light', 'dark', 'system'];
+    const i = order.indexOf(theme);
+    setTheme(order[(i + 1) % 3] ?? 'system');
+  };
+  const ThemeIcon = theme === 'light' ? Sun : theme === 'dark' ? Moon : Monitor;
+
   return (
-    <div className="flex flex-col h-full">
-      <div className="px-4 py-4 border-b border-gray-800 shrink-0">
-        <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-lg bg-brand-600 flex items-center justify-center text-white text-xs font-bold select-none">
+    <div className="flex h-full flex-col">
+      <div className="shrink-0 border-b border-black/10 px-3 py-4 dark:border-white/10">
+        <div className="flex items-center gap-3 px-2">
+          <div
+            className="flex h-9 w-9 shrink-0 select-none items-center justify-center rounded-xl border border-desk-border bg-gradient-to-br from-brand-700/85 to-brand-600/40 text-[10px] font-bold tracking-[0.12em] text-white shadow-inner"
+            aria-hidden="true"
+          >
             AI
           </div>
-          <span className="font-semibold text-sm text-white tracking-tight">Code Review</span>
+          <div className="min-w-0">
+            <p className="truncate text-[13px] font-semibold tracking-tight text-gray-900 dark:text-gray-50">
+              Code Review
+            </p>
+            <p className="truncate text-[10px] uppercase tracking-[0.16em] text-desk-muted">Beta</p>
+          </div>
         </div>
       </div>
 
-      <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto" aria-label="Main navigation">
-        {navItems.map(({ to, icon: Icon, label }) => (
+      <nav className="flex-1 space-y-1 overflow-y-auto px-2 py-4" aria-label="Main navigation">
+        <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-desk-muted">Navigate</p>
+        {navPrimary.map(({ to, icon: Icon, label, end }) => (
           <NavLink
-            key={to}
+            key={`${to}-${label}`}
             to={to}
-            end={to === '/reviews'}
+            end={end}
             onClick={onNavClick}
             className={({ isActive }) =>
               clsx(
-                'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-150',
+                'group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-semibold transition-colors duration-150',
                 isActive
-                  ? 'bg-brand-600/15 text-brand-400'
-                  : 'text-gray-400 hover:text-gray-100 hover:bg-gray-800'
+                  ? 'bg-desk-panel text-gray-900 shadow-lg shadow-black/25 ring-2 ring-brand-500/50 dark:text-gray-50 dark:shadow-black/50'
+                  : 'text-desk-muted hover:bg-desk-panel/60 hover:text-gray-900 dark:hover:text-gray-100'
               )
             }
           >
-            <Icon size={16} aria-hidden="true" />
-            {label}
+            <Icon size={17} aria-hidden="true" className="shrink-0 opacity-95" />
+            <span>{label}</span>
           </NavLink>
         ))}
+
+        <div className="mt-8 border-t border-desk-border pt-4">
+          <NavLink
+            to="/settings"
+            end
+            onClick={onNavClick}
+            className={({ isActive }) =>
+              clsx(
+                'flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[13px] font-semibold transition-colors',
+                isActive
+                  ? 'bg-desk-panel text-gray-900 ring-2 ring-desk-subtle dark:text-gray-50'
+                  : 'text-desk-muted hover:bg-desk-panel/60 hover:text-gray-900 dark:hover:text-gray-100'
+              )
+            }
+          >
+            <Settings size={17} aria-hidden="true" className="shrink-0" />
+            Settings
+          </NavLink>
+        </div>
       </nav>
 
-      <div className="px-2 py-3 border-t border-gray-800 space-y-1 shrink-0">
+      <div className="shrink-0 space-y-2 border-t border-black/10 px-2 py-4 dark:border-white/10">
+        <div className="mx-1 flex items-center justify-between gap-2 rounded-xl border border-desk-border bg-desk-canvas px-2 py-2">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-desk-muted">Theme</span>
+          <button
+            type="button"
+            onClick={cycleTheme}
+            aria-label={`Color theme: ${theme}. Click to cycle light, dark, or system.`}
+            className="rounded-lg p-1.5 text-desk-muted transition-colors hover:bg-desk-panel hover:text-gray-900 dark:hover:text-gray-100"
+          >
+            <ThemeIcon size={16} aria-hidden="true" />
+          </button>
+        </div>
         <div
           className={clsx(
-            'flex items-center gap-2 px-3 py-1.5 text-xs rounded-lg select-none',
-            connected ? 'text-green-400 bg-green-500/8' : 'text-gray-500 bg-gray-800/50'
+            'mx-1 flex items-center gap-2 rounded-lg border px-2.5 py-2 font-mono text-[10px] font-medium uppercase tracking-wider tabular-nums',
+            connected
+              ? 'border-emerald-600/30 bg-emerald-500/[0.12] text-emerald-900 dark:border-emerald-500/30 dark:bg-emerald-500/[0.1] dark:text-emerald-400/95'
+              : 'border-desk-border bg-desk-canvas text-desk-muted'
           )}
           aria-live="polite"
           aria-label={connected ? 'Live updates enabled' : 'Disconnected from live updates'}
         >
-          {connected ? (
-            <Wifi size={12} aria-hidden="true" />
-          ) : (
-            <WifiOff size={12} aria-hidden="true" />
-          )}
-          {connected ? 'Live updates on' : 'Offline'}
+          {connected ? <Wifi size={12} aria-hidden="true" /> : <WifiOff size={12} aria-hidden="true" />}
+          {connected ? 'Socket live' : 'Offline'}
         </div>
 
         {user && (
-          <div className="flex items-center gap-2.5 px-3 py-2 rounded-lg">
-            <Avatar src={user.avatarUrl} alt={user.username} size={26} />
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-medium text-gray-300 truncate">{user.username}</p>
+          <div className="mx-1 flex items-center gap-2.5 rounded-xl border border-desk-border bg-desk-canvas px-2 py-2">
+            <Avatar src={user.avatarUrl} alt={user.username} size={30} />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[12px] font-semibold text-gray-900 dark:text-gray-50">{user.username}</p>
+              <p className="truncate font-mono text-[10px] text-desk-muted">github.com</p>
             </div>
             <button
               type="button"
               onClick={handleLogout}
               aria-label="Sign out"
-              className="text-gray-600 hover:text-gray-300 transition-colors p-1 rounded"
+              className="rounded-lg p-1.5 text-desk-muted transition-colors hover:bg-red-500/15 hover:text-red-300"
             >
               <LogOut size={14} aria-hidden="true" />
             </button>
@@ -103,10 +229,11 @@ function NavContent({ onNavClick }) {
 
 export default function Layout() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { density } = useUiPreferences();
 
   return (
-    <div className="flex h-screen bg-gray-950 overflow-hidden">
-      <aside className="hidden md:flex w-56 flex-col bg-gray-900 border-r border-gray-800 shrink-0">
+    <div className="flex h-screen overflow-hidden bg-desk-canvas">
+      <aside className="hidden w-[262px] shrink-0 flex-col border-r border-desk-border bg-desk-sidebar shadow-[4px_0_24px_rgba(0,0,0,0.45)] md:flex">
         <NavContent />
       </aside>
 
@@ -118,17 +245,17 @@ export default function Layout() {
           aria-label="Navigation menu"
         >
           <div
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
             role="presentation"
             onClick={() => setMobileOpen(false)}
           />
-          <aside className="relative z-50 w-56 h-full bg-gray-900 border-r border-gray-800 flex flex-col shadow-2xl">
-            <div className="flex items-center justify-end px-3 py-2 border-b border-gray-800">
+          <aside className="relative z-50 flex h-full w-[min(300px,90vw)] flex-col border-r border-desk-border bg-desk-sidebar shadow-2xl">
+            <div className="flex items-center justify-end border-b border-desk-border px-2 py-1.5">
               <button
                 type="button"
                 onClick={() => setMobileOpen(false)}
                 aria-label="Close navigation"
-                className="text-gray-400 hover:text-gray-200 p-2"
+                className="rounded-lg p-2 text-desk-muted hover:bg-desk-panel hover:text-gray-900 dark:hover:text-gray-100"
               >
                 <X size={18} />
               </button>
@@ -138,25 +265,35 @@ export default function Layout() {
         </div>
       )}
 
-      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-        <div className="md:hidden flex items-center gap-3 px-4 py-3 bg-gray-900 border-b border-gray-800 shrink-0">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <header className="flex shrink-0 items-center gap-3 border-b border-desk-border bg-desk-sidebar px-4 py-3 md:hidden">
           <button
             type="button"
             onClick={() => setMobileOpen(true)}
             aria-label="Open navigation"
-            className="text-gray-400 hover:text-gray-200 transition-colors"
+            className="rounded-lg p-2 text-desk-muted hover:bg-desk-panel hover:text-gray-900 dark:hover:text-gray-100"
           >
             <Menu size={20} aria-hidden="true" />
           </button>
-          <div className="flex items-center gap-2">
-            <div className="w-5 h-5 rounded bg-brand-600 flex items-center justify-center text-white text-[9px] font-bold select-none">
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="flex h-8 w-8 shrink-0 select-none items-center justify-center rounded-lg bg-gradient-to-br from-brand-600 to-brand-800 text-[9px] font-bold tracking-widest text-white">
               AI
             </div>
-            <span className="text-sm font-semibold text-white">Code Review</span>
+            <span className="truncate text-sm font-semibold tracking-tight text-gray-900 dark:text-gray-50">
+              Code Review
+            </span>
           </div>
-        </div>
+        </header>
 
-        <main className="flex-1 overflow-y-auto">
+        <WorkspaceChromeBar />
+
+        <main
+          data-density={density}
+          className={clsx(
+            'desk-main min-h-0 flex-1 overflow-y-auto overscroll-contain transition-[font-size] duration-200',
+            density === 'compact' ? 'text-[13px]' : 'text-[15px]'
+          )}
+        >
           <Outlet />
         </main>
       </div>

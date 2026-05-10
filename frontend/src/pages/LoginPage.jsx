@@ -27,7 +27,9 @@ export default function LoginPage() {
     <LandingShell>
       <div className="card p-6 space-y-4">
         <div className="space-y-2 text-center">
-          <p className="text-sm text-gray-300">Sign in with your GitHub account to get started</p>
+          <p className="text-sm text-gray-700 dark:text-gray-300">
+            Sign in with your GitHub account to get started
+          </p>
           {authError && (
             <p className="text-xs text-red-400 text-left rounded-lg bg-red-950/40 border border-red-900/60 px-3 py-2">
               {authError}
@@ -35,7 +37,8 @@ export default function LoginPage() {
           )}
           {!import.meta.env.VITE_GITHUB_CLIENT_ID && (
             <p className="text-xs text-amber-400 text-center">
-              Missing VITE_GITHUB_CLIENT_ID — set it in frontend <code className="text-amber-200">.env</code>
+              Missing VITE_GITHUB_CLIENT_ID — set it in frontend{' '}
+              <code className="text-amber-900 dark:text-amber-200">.env</code>
             </p>
           )}
         </div>
@@ -50,7 +53,7 @@ export default function LoginPage() {
           Continue with GitHub
         </button>
 
-        <p className="text-xs text-gray-500 text-center">
+        <p className="text-center text-xs text-desk-muted">
           We request repo access to install webhooks and fetch diffs.
         </p>
       </div>

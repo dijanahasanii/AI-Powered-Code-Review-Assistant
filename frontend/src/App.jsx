@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { SocketProvider } from './context/SocketContext';
 import ErrorBoundary from './components/common/ErrorBoundary';
 import Layout from './components/common/Layout';
+import { UiPreferencesProvider } from './context/UiPreferencesContext';
 import GitHubLanding from './pages/GitHubLanding';
 import CallbackPage from './pages/CallbackPage';
 import { Spinner } from './components/common/UI';
@@ -12,10 +13,11 @@ const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 const RepositoriesPage = lazy(() => import('./pages/RepositoriesPage'));
 const ReviewsPage = lazy(() => import('./pages/ReviewsPage'));
 const ReviewDetailPage = lazy(() => import('./pages/ReviewDetailPage'));
+const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 function FullPageSpinner() {
   return (
     <div
-      className="flex h-screen items-center justify-center bg-gray-950"
+      className="flex h-screen items-center justify-center bg-desk-canvas"
       role="status"
       aria-label="Loading"
     >
@@ -46,14 +48,15 @@ function RouteSkeleton() {
 export default function App() {
   return (
     <AuthProvider>
-      <SocketProvider>
-        <ErrorBoundary>
-          <Routes>
-            <Route path="/" element={<GitHubLanding />} />
-            <Route path="/login" element={<GitHubLanding />} />
-            <Route path="/auth/callback" element={<CallbackPage />} />
+      <UiPreferencesProvider>
+        <SocketProvider>
+          <ErrorBoundary>
+            <Routes>
+              <Route path="/" element={<GitHubLanding />} />
+              <Route path="/login" element={<GitHubLanding />} />
+              <Route path="/auth/callback" element={<CallbackPage />} />
 
-            <Route
+              <Route
               element={
                 <ProtectedRoute>
                   <Layout />
@@ -100,12 +103,23 @@ export default function App() {
                   </ErrorBoundary>
                 }
               />
-            </Route>
+              <Route
+                path="settings"
+                element={
+                  <ErrorBoundary>
+                    <Suspense fallback={<RouteSkeleton />}>
+                      <SettingsPage />
+                    </Suspense>
+                  </ErrorBoundary>
+                }
+              />
+              </Route>
 
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </ErrorBoundary>
-      </SocketProvider>
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </ErrorBoundary>
+        </SocketProvider>
+      </UiPreferencesProvider>
     </AuthProvider>
   );
 }

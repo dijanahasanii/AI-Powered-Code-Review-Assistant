@@ -15,7 +15,7 @@ export default function GitHubLanding() {
   if (loading) {
     return (
       <div
-        className="flex h-screen items-center justify-center bg-gray-950"
+        className="flex h-screen items-center justify-center bg-desk-canvas"
         role="status"
         aria-label="Loading"
       >
@@ -32,10 +32,10 @@ export default function GitHubLanding() {
       <LandingShell>
         <div className="card p-6 space-y-4">
           <div className="space-y-2 text-center">
-            <p className="text-sm text-gray-300">GitHub is connected.</p>
-            <p className="text-xs text-gray-500">
+            <p className="text-sm text-gray-700 dark:text-gray-300">GitHub is connected.</p>
+            <p className="text-xs text-desk-muted">
               Signed in as{' '}
-              <span className="text-gray-200 font-medium font-mono">@{user.username}</span>
+              <span className="font-mono font-medium text-gray-900 dark:text-gray-200">@{user.username}</span>
             </p>
           </div>
 

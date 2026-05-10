@@ -23,18 +23,20 @@ export const SeverityBadge = ({ severity, plainLanguage }) => {
   return <span className={map[severity] || 'badge-info'}>{label}</span>;
 };
 
-export const StatusBadge = ({ status }) => {
+export const StatusBadge = ({ status, compact }) => {
   const map = {
-    pending: 'bg-gray-500/15 text-gray-400 border-gray-500/20',
-    processing: 'bg-blue-500/15 text-blue-400 border-blue-500/20 animate-pulse',
-    completed: 'bg-green-500/15 text-green-400 border-green-500/20',
-    failed: 'bg-red-500/15 text-red-400 border-red-500/20',
+    pending:
+      'bg-desk-elevated text-desk-muted border-desk-border',
+    processing: 'bg-blue-500/12 text-[#79c0ff] border-blue-500/25 animate-pulse',
+    completed: 'bg-green-500/10 text-green-400/95 border-green-500/28',
+    failed: 'bg-red-500/10 text-[#ff7b72] border-red-500/28',
   };
   return (
     <span
       className={clsx(
-        'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border',
-        map[status]
+        'inline-flex items-center rounded-full border font-medium capitalize',
+        compact ? 'px-1.5 py-0 text-[10px]' : 'px-2 py-0.5 text-xs',
+        map[status] ?? map.pending
       )}
     >
       {status}
@@ -66,7 +68,7 @@ export const EmptyState = ({ icon: Icon, title, description, action }) => (
         <Icon size={22} className="text-gray-500" aria-hidden="true" />
       </div>
     )}
-    <h3 className="text-sm font-medium text-gray-300 mb-1">{title}</h3>
+    <h3 className="mb-1 text-sm font-medium text-gray-800 dark:text-gray-300">{title}</h3>
     {description && <p className="text-sm text-gray-500 max-w-xs mb-4">{description}</p>}
     {action}
   </div>
@@ -99,8 +101,13 @@ export const ScoreRing = ({ score, size = 64 }) => {
       style={{ width: size, height: size }}
       aria-label={`Quality score ${score} out of 100`}
     >
-      <svg width={size} height={size} className="-rotate-90" aria-hidden="true">
-        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="#1f2937" strokeWidth={4} />
+      <svg
+        width={size}
+        height={size}
+        className="-rotate-90 text-gray-200 dark:text-gray-700"
+        aria-hidden="true"
+      >
+        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="currentColor" strokeWidth={4} />
         <circle
           cx={size / 2}
           cy={size / 2}
@@ -123,10 +130,14 @@ export const ScoreRing = ({ score, size = 64 }) => {
 
 // ── Page header ───────────────────────────────────────────────────────────────
 export const PageHeader = ({ title, description, action }) => (
-  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-6">
+  <div className="mb-10 flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
     <div className="min-w-0">
-      <h1 className="text-xl font-semibold text-white">{title}</h1>
-      {description && <p className="text-sm text-gray-400 mt-0.5">{description}</p>}
+      <h1 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-gray-50 sm:text-[1.65rem] sm:leading-snug">
+        {title}
+      </h1>
+      {description && (
+        <p className="mt-2 max-w-2xl text-[15px] leading-relaxed text-desk-muted md:text-[0.9375rem]">{description}</p>
+      )}
     </div>
     {action && <div className="shrink-0">{action}</div>}
   </div>
