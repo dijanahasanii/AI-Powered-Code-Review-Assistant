@@ -9,6 +9,16 @@ export default defineConfig({
     setupFiles: './src/test/setup.js',
     css: true,
     include: ['src/**/*.test.{js,jsx}'],
+    /** Large page imports + RTL — single worker avoids flaky OOM on Windows CI. */
+    pool: 'threads',
+    poolOptions: {
+      threads: {
+        maxThreads: 1,
+        minThreads: 1,
+      },
+    },
+    /** Run test files sequentially to avoid extra worker memory spikes. */
+    fileParallelism: false,
   },
   server: {
     port: 5173,

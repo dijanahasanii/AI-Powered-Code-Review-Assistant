@@ -4,7 +4,7 @@
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
-MSG="${1:-chore: deploy}"
+MSG="${commitMessage}"
 git add -A
 git commit -m "$MSG"
 git push

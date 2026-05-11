@@ -60,24 +60,24 @@ GitHub (push event)
        │ POST /api/webhooks/github
        ▼
 ┌──────────────────────────────────────────────────────┐
-│                  Node.js Backend (Express)            │
+│                  Node.js Backend (Express)           │
 │                                                      │
-│  ┌──────────┐  ┌─────────────┐  ┌─────────────────┐ │
-│  │  Auth    │  │  REST API   │  │ Webhook Handler  │ │
-│  │  (JWT)   │  │  Routes     │  │ (sig verify)     │ │
-│  └──────────┘  └─────────────┘  └────────┬────────┘ │
+│  ┌──────────┐  ┌─────────────┐  ┌─────────────────┐  │
+│  │  Auth    │  │  REST API   │  │ Webhook Handler │  │
+│  │  (JWT)   │  │  Routes     │  │ (sig verify)    │  │
+│  └──────────┘  └─────────────┘  └────────┬────────┘  │
 │                                          │           │
 │  ┌────────────────────────────────────────▼────────┐ │
 │  │            Bull Job Queue (Redis)               │ │
 │  └────────────────────────────────────────┬────────┘ │
 │                                           │          │
-│  ┌────────────────────────────────────────▼────────┐ │
-│  │               Queue Worker                     │ │
-│  │  1. Fetch diff (GitHub API)                    │ │
-│  │  2. Build prompt + call OpenAI                 │ │
-│  │  3. Parse + store results (Supabase)           │ │
-│  │  4. Emit WebSocket event                       │ │
-│  └────────────────────────────────────────────────┘ │
+│  ┌────────────────────────────────────────▼───────┐  │
+│  │               Queue Worker                     │  │
+│  │  1. Fetch diff (GitHub API)                    │  │
+│  │  2. Build prompt + call OpenAI                 │  │
+│  │  3. Parse + store results (Supabase)           │  │
+│  │  4. Emit WebSocket event                       │  │ 
+│  └────────────────────────────────────────────────┘  │
 └──────────────────────────────────────────────────────┘
        │                    │                │
   OpenAI API          Supabase DB      Socket.io
@@ -85,8 +85,8 @@ GitHub (push event)
                                           │
                                           ▼
                            ┌─────────────────────────┐
-                           │    React Dashboard       │
-                           │  (Vite + Tailwind CSS)   │
+                           │    React Dashboard      │
+                           │  (Vite + Tailwind CSS)  │
                            └─────────────────────────┘
 ```
 
