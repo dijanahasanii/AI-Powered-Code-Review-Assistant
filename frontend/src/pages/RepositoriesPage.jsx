@@ -86,6 +86,10 @@ export default function RepositoriesPage() {
     mutationFn: (id) => reposApi.disconnect(id),
     onSuccess: (_, id) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.repos });
+      // Backend removes reviews for this repo — refresh lists so sidebar / Reviews stay in sync without full reload.
+      queryClient.invalidateQueries({ queryKey: queryKeys.reviewsAll });
+      queryClient.invalidateQueries({ queryKey: queryKeys.stats });
+      queryClient.invalidateQueries({ queryKey: ['review'] });
       const name = connected.find((r) => r.id === id)?.full_name ?? 'Repository';
       toast.success('Disconnected', `${name} has been removed from review automation.`);
       setConfirmRepo(null);

@@ -12,6 +12,7 @@
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
     "install:all": "cd backend && npm install && cd ../frontend && npm install",
     "verify:setup": "node scripts/verify-setup.js",
+    "evaluate": "node evaluation/run_evaluation.js",
     "test:backend": "cd backend && npm test",
     "build:frontend": "cd frontend && npm run build"
   },
