@@ -30,15 +30,28 @@ if (!useInlineJobQueue()) {
 async function enqueueAnalyzeJob(data) {
   if (useInlineJobQueue()) {
     const { runAnalyzeJob } = require('./reviewJobProcessor');
+    logger.debug('Running inline analyze job', {
+      reviewId: data?.reviewId,
+      repositoryId: data?.repositoryId,
+    });
     void Promise.resolve()
       .then(() => runAnalyzeJob(data, { rethrowOnError: false }))
       .catch((err) => {
-        logger.error(`Inline analyze job failed: ${err.message}`, err);
+        logger.error(`Inline analyze job failed: ${err.message}`, {
+          reviewId: data?.reviewId,
+          repositoryId: data?.repositoryId,
+          stack: err?.stack,
+        });
       });
     return;
   }
 
-  await reviewQueue.add('analyze', data);
+  const job = await reviewQueue.add('analyze', data);
+  logger.info('Queued Bull analyze job', {
+    jobId: job?.id,
+    reviewId: data?.reviewId,
+    repositoryId: data?.repositoryId,
+  });
 }
 
 module.exports = { reviewQueue, enqueueAnalyzeJob };

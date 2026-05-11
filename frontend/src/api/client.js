@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { getPublicApiBaseUrl } from '../config/publicUrls';
+import { attachApiContractGuard } from './contractGuard';
 
 const api = axios.create({
   baseURL: getPublicApiBaseUrl(),
@@ -34,6 +35,8 @@ api.interceptors.response.use(
     return Promise.reject(err);
   }
 );
+
+attachApiContractGuard(api);
 
 export const authApi = {
   getMe: () => api.get('/api/auth/me'),

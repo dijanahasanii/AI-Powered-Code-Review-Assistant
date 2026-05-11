@@ -25,7 +25,12 @@ async function runAnalyzeJob(jobData, { rethrowOnError = false } = {}) {
     throw new Error(msg);
   }
 
-  logger.info(`Processing review for commit ${commitSha} (review ${reviewId})`);
+  logger.info('Processing review job', {
+    reviewId,
+    repositoryId,
+    commitShaShort: commitSha?.slice(0, 7),
+    userId,
+  });
 
   try {
     await updateReviewStatus(reviewId, 'processing', { error_message: null });
@@ -69,9 +74,19 @@ async function runAnalyzeJob(jobData, { rethrowOnError = false } = {}) {
       issueCount: analysis.issues.length,
     });
 
-    logger.info(`Review ${reviewId} completed successfully`);
+    logger.info('Review job completed', {
+      reviewId,
+      repositoryId,
+      overallScore: analysis?.overallScore,
+      issueCount: analysis?.issues?.length,
+    });
   } catch (err) {
-    logger.error(`Review ${reviewId} failed: ${err.message}`, err);
+    logger.error(`Review job failed: ${err.message}`, {
+      reviewId,
+      repositoryId,
+      userId,
+      stack: err?.stack,
+    });
     await markReviewFailed(reviewId, err);
     emitUpdate(io, userId, repositoryId, { reviewId, status: 'failed', error: err.message });
     if (rethrowOnError) throw err;
@@ -137,7 +152,8 @@ const markReviewFailed = async (reviewId, err) => {
 
   if (error) {
     logger.warn(
-      'Could not save error_message (column missing?) — falling back to summary prefix. Run: ALTER TABLE code_reviews ADD COLUMN IF NOT EXISTS error_message TEXT;'
+      'Could not save error_message (column missing?) — falling back to summary prefix. Run: ALTER TABLE code_reviews ADD COLUMN IF NOT EXISTS error_message TEXT;',
+      { reviewId }
     );
     ({ error } = await supabase
       .from('code_reviews')

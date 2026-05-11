@@ -1,9 +1,10 @@
 import { lazy, Suspense } from 'react';
-import { Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
-import { AuthProvider, useAuth } from './context/AuthContext';
+import { Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider } from './context/AuthContext';
 import { SocketProvider } from './context/SocketContext';
 import ErrorBoundary from './components/common/ErrorBoundary';
 import Layout from './components/common/Layout';
+import { RequireAuthOutlet } from './components/common/RequireAuthOutlet';
 import { UiPreferencesProvider } from './context/UiPreferencesContext';
 import GitHubLanding from './pages/GitHubLanding';
 import CallbackPage from './pages/CallbackPage';
@@ -14,35 +15,6 @@ const RepositoriesPage = lazy(() => import('./pages/RepositoriesPage'));
 const ReviewsPage = lazy(() => import('./pages/ReviewsPage'));
 const ReviewDetailPage = lazy(() => import('./pages/ReviewDetailPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
-function FullPageSpinner() {
-  return (
-    <div
-      className="flex h-screen items-center justify-center bg-desk-canvas"
-      role="status"
-      aria-label="Loading"
-    >
-      <div className="flex flex-col items-center gap-3">
-        <Spinner size="lg" />
-        <p className="text-sm text-gray-500">Loading…</p>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Auth gate for all workspace routes — must wrap nested routes via <Outlet /> (not by passing Layout as JSX children).
- * Otherwise unauthenticated URLs can bypass the guard depending on RR version / tree shape.
- */
-function RequireAuthOutlet() {
-  const { user, loading } = useAuth();
-  const location = useLocation();
-
-  if (loading) return <FullPageSpinner />;
-  if (!user) {
-    return <Navigate to="/" replace state={{ from: location.pathname + location.search }} />;
-  }
-  return <Outlet />;
-}
 
 /** Keeps suspense fallback aligned with routed content area height inside `Layout`. */
 function RouteSkeleton() {
@@ -53,7 +25,7 @@ function RouteSkeleton() {
   );
 }
 
-export default function App() {
+function App() {
   return (
     <AuthProvider>
       <UiPreferencesProvider>
@@ -127,3 +99,5 @@ export default function App() {
     </AuthProvider>
   );
 }
+
+export default App;

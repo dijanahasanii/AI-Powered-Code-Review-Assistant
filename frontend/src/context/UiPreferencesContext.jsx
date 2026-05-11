@@ -91,6 +91,7 @@ export function UiPreferencesProvider({ children }) {
   }, []);
 
   const resolvedTheme = useMemo(() => {
+    void systemMediaVersion;
     if (typeof window === 'undefined') return 'light';
     return resolveTheme(theme);
   }, [theme, systemMediaVersion]);

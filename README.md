@@ -21,6 +21,7 @@
 12. [Risks & Challenges](#12-risks--challenges)
 13. [End-to-End Flow Summary](#13-end-to-end-flow-summary)
 14. [Quick Start](#14-quick-start)
+15. [Production operations & flows](#15-production-operations--flows)
 
 ---
 
@@ -671,6 +672,34 @@ GitHub → Settings → Developer Settings → OAuth Apps → New
 - Callback URL: `http://localhost:5173/auth/callback`
 
 Copy Client ID and Client Secret to your `.env` files.
+
+---
+
+## 15. Production operations & flows
+
+High-level behavior you can rely on when operating or debugging this stack.
+
+### Review lifecycle
+
+1. A row is created in `code_reviews` with `status: pending` (manual trigger, webhook, or duplicate-commit resolution).
+2. Work is **queued**: either **in-process** (`QUEUE` not using Redis / inline mode) or **Bull + Redis** (`reviewQueue.add`).
+3. The worker loads the diff (GitHub API), runs analysis (OpenAI / rules), writes `review_issues` and `review_file_stats`, sets `status: completed` or `failed`, and emits **`review:update`** over Socket.io.
+
+### GitHub → webhook → review
+
+1. GitHub POSTs signed payloads to **`POST /api/webhooks/github`**.
+2. The backend verifies **HMAC** with `GITHUB_WEBHOOK_SECRET`, maps the repo to your DB, and enqueues the same analyze pipeline as manual triggers where applicable.
+
+### Realtime (Socket.io)
+
+1. The browser opens a Socket.io connection with **`auth: { token }` (JWT)**.
+2. After handshake, the server joins the socket to **`user:<yourUserId>`** automatically; the client may request **`join:repo`** for repos you own (server validates ownership).
+3. On review status changes, the API emits **`review:update`** to the owning user (and repo room) so the dashboard can invalidate React Query caches.
+
+### Queue / worker
+
+- **Redis + Bull**: jobs are persisted and retried per Bull settings; logs include **`jobId`** when enqueued.
+- **Inline**: jobs run immediately in a detached promise on the API process; logs tag **`reviewId` / `repositoryId`** for correlation.
 
 ---
 
