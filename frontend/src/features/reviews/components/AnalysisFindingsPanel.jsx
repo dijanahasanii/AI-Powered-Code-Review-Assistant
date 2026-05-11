@@ -28,7 +28,7 @@ export function AnalysisFindingsPanel({ sortedIssues, byBucket, firstNonEmptyBuc
     <CollapsibleSection
       idPrefix="analysis-findings"
       icon={ClipboardList}
-      title="Analysis findings"
+      title="What we found"
       badge={sortedIssues.length}
       expandable={false}
       summary={
@@ -42,10 +42,11 @@ export function AnalysisFindingsPanel({ sortedIssues, byBucket, firstNonEmptyBuc
           ) : null}
         </>
       }
-      panelClassName="max-h-[min(28rem,calc(100vh-12rem))] overflow-y-auto overscroll-contain px-2 pb-3 pt-3 sm:px-4 sm:pb-4"
+      panelClassName="max-h-[min(28rem,calc(100vh-12rem))] overflow-y-auto overscroll-contain px-4 pb-4 pt-3 sm:pb-5"
     >
-      <p className="mb-3 px-2 text-[11px] text-desk-muted sm:px-0">
-        Themes below open individually. Long themes scroll inside their card — this panel scrolls for many themes.
+      <p className="mb-3 text-[11px] text-desk-muted">
+        Each topic opens on its own. Inside you will see rule names and code snippets — the section above stays in plain
+        English.
       </p>
       <div className="flex flex-col gap-4">
         {ANALYSIS_BUCKETS.map((bucket) =>

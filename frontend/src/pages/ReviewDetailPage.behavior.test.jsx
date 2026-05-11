@@ -106,6 +106,7 @@ describe('ReviewDetailPage (user behavior)', () => {
     expect(await screen.findByText(/Solid change set\./)).toBeInTheDocument();
     expect(screen.getByText('org/app')).toBeInTheDocument();
     expect(screen.getByText('deadbee')).toBeInTheDocument();
+    expect(screen.getByText(/Nothing flagged this time/i)).toBeInTheDocument();
   });
 
   it('calls retry when analysis failed and user clicks Retry analysis', async () => {

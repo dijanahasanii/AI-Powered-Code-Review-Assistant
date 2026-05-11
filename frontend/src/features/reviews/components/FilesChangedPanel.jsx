@@ -17,7 +17,7 @@ export function FilesChangedPanel({ fileStats }) {
     <CollapsibleSection
       idPrefix="files-changed"
       icon={FileCode}
-      title="Files in this commit"
+      title="Changed files"
       badge={fileStats.length}
       defaultExpanded={false}
       summary={

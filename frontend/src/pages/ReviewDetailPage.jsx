@@ -9,7 +9,6 @@ import {
   XCircle,
   RefreshCw,
   GitBranch,
-  CheckCircle2,
   Clock,
 } from 'lucide-react';
 import { reviewsApi } from '../api/client';
@@ -24,6 +23,7 @@ import {
 } from '../features/reviews/analysisConstants';
 import { AnalysisFindingsPanel } from '../features/reviews/components/AnalysisFindingsPanel';
 import { FilesChangedPanel } from '../features/reviews/components/FilesChangedPanel';
+import { ReviewVerdictBanner } from '../features/reviews/components/ReviewVerdictBanner';
 import { queryKeys } from '../lib/queryKeys';
 
 export default function ReviewDetailPage() {
@@ -183,6 +183,7 @@ export default function ReviewDetailPage() {
       </Link>
 
       <section className="card mb-6 p-5 sm:p-6" aria-label="Review summary">
+        <ReviewVerdictBanner status={review.status} issueCounts={issueCounts} totalIssues={issues.length} />
         <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
           <ScoreRing score={review.overall_score} size={60} />
           <div className="min-w-0 flex-1">
@@ -230,21 +231,18 @@ export default function ReviewDetailPage() {
 
         {review.summary && !summaryStartsWithFailurePrefix && (
           <div className="mt-6 border-t border-desk-border pt-5">
-            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-desk-muted">Summary</p>
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-desk-muted">
+              What the scan said
+            </p>
             <p className="text-sm leading-relaxed text-gray-800 dark:text-gray-300">{review.summary}</p>
           </div>
         )}
 
+        {review.status === 'completed' && issues.length > 0 ? (
         <div
           className="mt-6 flex flex-nowrap gap-2 overflow-x-auto overscroll-contain pb-1 sm:flex-wrap md:overflow-visible md:pb-0"
           aria-label="Issue breakdown"
         >
-          {review.status === 'completed' && issues.length === 0 && (
-            <span className="flex shrink-0 items-center gap-2 text-[12px] text-green-700 dark:text-green-400/95">
-              <CheckCircle2 size={14} aria-hidden="true" />
-              No flagged issues detected
-            </span>
-          )}
           {SEVERITY_ORDER.map((sev) =>
             issueCounts[sev] > 0 ? (
               <a
@@ -258,6 +256,7 @@ export default function ReviewDetailPage() {
             ) : null
           )}
         </div>
+        ) : null}
       </section>
 
       {review.status === 'failed' && (
