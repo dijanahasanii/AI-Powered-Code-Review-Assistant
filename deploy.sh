@@ -7,3 +7,4 @@ cd "$(git rev-parse --show-toplevel)"
 MSG="${1:-chore: snapshot}"
 git add -A
 git commit -m "$MSG"
+git push
