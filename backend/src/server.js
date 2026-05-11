@@ -21,6 +21,7 @@ const reviewRoutes = require('./routes/reviews');
 const webhookRoutes = require('./routes/webhooks');
 const { initializeWorker } = require('./services/queueWorker');
 const { getReviewAiRuntimeInfo } = require('./services/openaiService');
+const { registerSocketIO } = require('./socket/registerSocketIO');
 
 const app = express();
 const httpServer = createServer(app);
@@ -75,23 +76,7 @@ const io = new Server(httpServer, {
 // Attach io to app so controllers can emit events
 app.set('io', io);
 
-io.on('connection', (socket) => {
-  logger.info(`WebSocket client connected: ${socket.id}`);
-
-  // Client joins a room per repo to receive targeted updates
-  socket.on('join:repo', (repoId) => {
-    socket.join(`repo:${repoId}`);
-    logger.debug(`Socket ${socket.id} joined room repo:${repoId}`);
-  });
-
-  socket.on('join:user', (userId) => {
-    if (userId) socket.join(`user:${userId}`);
-  });
-
-  socket.on('disconnect', () => {
-    logger.info(`WebSocket client disconnected: ${socket.id}`);
-  });
-});
+registerSocketIO(io);
 
 // ── Core middleware ──────────────────────────────────────────────────────────
 app.use(helmet());

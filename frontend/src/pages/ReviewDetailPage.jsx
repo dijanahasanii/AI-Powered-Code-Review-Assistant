@@ -1,399 +1,30 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { safeDistanceToNow, safeFormatDateTime } from '../utils/safeDates';
 import {
   ChevronLeft,
   GitCommit,
-  FileCode,
   AlertTriangle,
-  Lightbulb,
-  Info,
   XCircle,
-  Clock,
   RefreshCw,
   GitBranch,
   CheckCircle2,
-  Shield,
-  Gauge,
-  Braces,
-  ChevronDown,
-  ClipboardList,
+  Clock,
 } from 'lucide-react';
-import clsx from 'clsx';
 import { reviewsApi } from '../api/client';
 import { useSocket } from '../context/SocketContext';
 import { ScoreRing, SeverityBadge, StatusBadge, Spinner } from '../components/common/UI';
-import CollapsibleSection from '../components/common/CollapsibleSection';
 import { ReviewDetailSkeleton } from '../components/common/Skeletons';
-
-const SEVERITY_META = {
-  critical: {
-    icon: XCircle,
-    color: 'text-[#ff7b72]',
-    wrap: 'border-red-500/25 bg-red-500/[0.06]',
-  },
-  warning: {
-    icon: AlertTriangle,
-    color: 'text-[#d29922]',
-    wrap: 'border-amber-500/22 bg-amber-500/[0.06]',
-  },
-  info: { icon: Info, color: 'text-[#58a6ff]', wrap: 'border-blue-500/22 bg-blue-500/[0.06]' },
-  suggestion: {
-    icon: Lightbulb,
-    color: 'text-[#a371f7]',
-    wrap: 'border-violet-500/22 bg-violet-500/[0.06]',
-  },
-};
-
-const SEVERITY_ORDER = ['critical', 'warning', 'info', 'suggestion'];
-
-const CATEGORY_DISPLAY = {
-  security: 'Security',
-  bug: 'Bug risk',
-  maintainability: 'Cleanup / upkeep',
-  performance: 'Speed / load',
-  style: 'Style',
-  'bad-practice': 'Habits to avoid',
-  'error-handling': 'Errors & recovery',
-  'code-quality': 'Code clarity',
-  react: 'React UI',
-  vue: 'Vue UI',
-  express: 'Server (Node)',
-  async: 'Promises & async code',
-};
-
-const ANALYSIS_BUCKETS = [
-  {
-    id: 'security',
-    title: 'Security',
-    description: 'Trust boundaries, credentials, injections, fragile error paths',
-    icon: Shield,
-  },
-  {
-    id: 'performance',
-    title: 'Performance',
-    description: 'Latency hotspots, concurrency, scalability tradeoffs',
-    icon: Gauge,
-  },
-  {
-    id: 'code-quality',
-    title: 'Code Quality',
-    description: 'Readability, structure, correctness, frameworks, housekeeping',
-    icon: Braces,
-  },
-];
-
-function bucketCategory(raw) {
-  const c = (raw || '').toLowerCase().trim();
-  if (['security', 'bad-practice', 'error-handling'].includes(c)) return 'security';
-  if (['performance', 'async'].includes(c)) return 'performance';
-  return 'code-quality';
-}
-
-/** Severity strip links scroll to first bucket that contains that severity. */
-function bucketCategoryForSeverityJump(severity, bucketMap) {
-  for (const bucket of ANALYSIS_BUCKETS) {
-    const bucketIssues = bucketMap[bucket.id] ?? [];
-    if (bucketIssues.some((i) => i.severity === severity)) return bucket.id;
-  }
-  return ANALYSIS_BUCKETS[0].id;
-}
-
-function IssueAccordionRow({ issue, defaultOpen }) {
-  const meta = SEVERITY_META[issue.severity] ?? SEVERITY_META.info;
-  const Icon = meta.icon;
-  const typeLabel = issue.category
-    ? CATEGORY_DISPLAY[issue.category] ||
-      `${issue.category.charAt(0).toUpperCase()}${issue.category.slice(1)}`
-    : null;
-  const hasSnippet =
-    typeof issue.code_snippet === 'string' && issue.code_snippet.trim().length > 0;
-  const [open, setOpen] = useState(Boolean(defaultOpen));
-
-  return (
-    <div className={clsx('overflow-hidden rounded-md border bg-desk-canvas', meta.wrap)}>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-start gap-3 px-3 py-3 text-left sm:gap-4 sm:px-4"
-        aria-expanded={open}
-      >
-        <Icon size={16} className={clsx('mt-0.5 shrink-0', meta.color)} aria-hidden="true" />
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-start gap-x-2 gap-y-1.5">
-            <SeverityBadge severity={issue.severity} plainLanguage />
-            {typeLabel && (
-              <span className="inline-flex rounded border border-desk-border bg-desk-panel px-1.5 py-0 text-[11px] text-desk-muted">
-                <span className="text-desk-muted">Topic:</span>
-                <span className="ml-1 font-medium text-gray-800 dark:text-gray-200">{typeLabel}</span>
-              </span>
-            )}
-            <span className="w-full basis-full text-[13px] font-semibold leading-snug text-gray-900 dark:text-gray-100">
-              {issue.title}
-            </span>
-          </div>
-          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-0.5 font-mono text-[11px] text-desk-muted">
-            <span className="inline-flex max-w-[min(100%,28rem)] min-w-0 items-center truncate" title={issue.file_path}>
-              <FileCode size={12} className="mr-1 shrink-0 text-desk-subtle" aria-hidden="true" />
-              {issue.file_path ?? '—'}
-            </span>
-            <span className="text-desk-muted">:</span>
-            <span className="tabular-nums text-brand-700 dark:text-brand-400">
-              {issue.line_number != null && issue.line_number !== '' ? issue.line_number : '—'}
-            </span>
-          </div>
-        </div>
-        <ChevronDown
-          size={18}
-          className={clsx(
-            'mt-1 shrink-0 text-desk-muted transition-transform duration-200',
-            open && 'rotate-180'
-          )}
-          aria-hidden="true"
-        />
-      </button>
-      {open && (
-        <div className="space-y-3 border-t border-desk-border px-3 pb-4 pt-3 sm:px-4">
-          {hasSnippet && (
-            <div>
-              <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-desk-muted">
-                Matched line
-              </p>
-              <pre className="max-h-52 overflow-x-auto overflow-y-auto whitespace-pre-wrap break-all rounded-md border border-desk-border bg-[#010409] p-3 font-mono text-[12px] leading-relaxed text-[#79c0ff]">
-                {issue.code_snippet.trim()}
-              </pre>
-            </div>
-          )}
-
-          <div>
-            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-desk-muted">
-              Why you&apos;re seeing this
-            </p>
-            {issue.matched_rule ? (
-              <p className="mb-2 text-[12px] leading-relaxed text-amber-950 dark:text-amber-200/90">
-                <span className="text-desk-muted">What we checked: </span>
-                {issue.matched_rule}
-              </p>
-            ) : null}
-            <p className="text-sm leading-relaxed text-gray-800 dark:text-gray-300">{issue.description}</p>
-          </div>
-
-          {issue.suggestion && (
-            <div className="rounded-md border border-brand-700/35 bg-brand-900/25 p-3">
-              <p className="mb-1.5 flex items-center gap-1.5 text-[12px] font-semibold text-brand-700 dark:text-brand-400">
-                <Lightbulb size={12} aria-hidden="true" />
-                What to try
-              </p>
-              <p className="text-[12px] leading-relaxed text-gray-800 dark:text-gray-300">{issue.suggestion}</p>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function CategoryAccordion({ bucket, issues, initiallyOpen }) {
-  const BucketIcon = bucket.icon;
-  const [open, setOpen] = useState(initiallyOpen);
-  const sevHints = useMemo(() => {
-    const c = {};
-    issues.forEach((i) => {
-      if (i.severity) c[i.severity] = (c[i.severity] || 0) + 1;
-    });
-    return c;
-  }, [issues]);
-
-  return (
-    <section
-      className="card overflow-hidden"
-      aria-label={`${bucket.title}: ${issues.length} issues`}
-      id={`analysis-${bucket.id}`}
-    >
-      <button
-        type="button"
-        className="flex w-full flex-col gap-1 border-b border-desk-border px-4 py-3.5 text-left transition-colors hover:bg-desk-elevated/40 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-      >
-        <div className="flex min-w-0 items-start gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-desk-border bg-desk-canvas">
-            <BucketIcon size={17} className="text-gray-600 dark:text-gray-300" aria-hidden="true" />
-          </div>
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-[13px] font-semibold tracking-tight text-gray-900 dark:text-gray-50">
-                {bucket.title}
-              </h3>
-              <span className="rounded-full border border-desk-border bg-desk-elevated px-2 py-0.5 text-[11px] font-medium tabular-nums text-desk-muted">
-                {issues.length} issue{issues.length !== 1 ? 's' : ''}
-              </span>
-            </div>
-            <p className="mt-0.5 text-[12px] text-desk-muted">{bucket.description}</p>
-          </div>
-        </div>
-        <div className="flex shrink-0 items-center gap-2 pl-12 sm:pl-0">
-          <div className="flex flex-wrap gap-1.5">
-            {SEVERITY_ORDER.filter((s) => sevHints[s] > 0).map((sev) => (
-              <span key={sev} className="tabular-nums">
-                <SeverityBadge severity={sev} />
-                <span className="ml-0.5 align-middle text-[11px] text-desk-muted">{sevHints[sev]}</span>
-              </span>
-            ))}
-          </div>
-          <ChevronDown
-            size={18}
-            className={clsx('text-desk-muted transition-transform duration-200', open && 'rotate-180')}
-            aria-hidden="true"
-          />
-        </div>
-      </button>
-      {open && (
-        <div className="max-h-72 overflow-y-auto overscroll-contain border-t border-desk-border p-3 sm:max-h-80 sm:p-4">
-          <div className="space-y-2">
-            {issues.map((issue, i) => (
-              <IssueAccordionRow
-                key={issue.id ?? `${bucket.id}-${i}-${issue.line_number ?? 'x'}`}
-                issue={issue}
-                defaultOpen={i === 0 && issues.length <= 2}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-    </section>
-  );
-}
-
-const SEVERITY_ROLLUP_LABEL = {
-  critical: 'serious',
-  warning: 'warnings',
-  info: 'FYI',
-  suggestion: 'suggestions',
-};
-
-function AnalysisFindingsPanel({ sortedIssues, byBucket, firstNonEmptyBucketId }) {
-  const rollups = useMemo(() => {
-    if (!sortedIssues.length) return null;
-    const bySev = { critical: 0, warning: 0, info: 0, suggestion: 0 };
-    for (const issue of sortedIssues) {
-      if (bySev[issue.severity] != null) bySev[issue.severity]++;
-    }
-    const severityLine = SEVERITY_ORDER.filter((s) => bySev[s] > 0)
-      .map((s) => `${bySev[s]} ${SEVERITY_ROLLUP_LABEL[s]}`)
-      .join(' · ');
-    const themeGroups = ANALYSIS_BUCKETS.reduce((n, b) => n + ((byBucket[b.id] ?? []).length > 0 ? 1 : 0), 0);
-    return { severityLine, themeGroups };
-  }, [sortedIssues, byBucket]);
-
-  if (!sortedIssues.length || !rollups) return null;
-
-  return (
-    <CollapsibleSection
-      idPrefix="analysis-findings"
-      icon={ClipboardList}
-      title="Analysis findings"
-      badge={sortedIssues.length}
-      expandable={false}
-      summary={
-        <>
-          {rollups.themeGroups} theme group{rollups.themeGroups !== 1 ? 's' : ''}
-          {rollups.severityLine ? (
-            <>
-              <span aria-hidden="true"> · </span>
-              <span>{rollups.severityLine}</span>
-            </>
-          ) : null}
-        </>
-      }
-      panelClassName="max-h-[min(28rem,calc(100vh-12rem))] overflow-y-auto overscroll-contain px-2 pb-3 pt-3 sm:px-4 sm:pb-4"
-    >
-      <p className="mb-3 px-2 text-[11px] text-desk-muted sm:px-0">
-        Themes below open individually. Long themes scroll inside their card — this panel scrolls for many themes.
-      </p>
-      <div className="flex flex-col gap-4">
-        {ANALYSIS_BUCKETS.map((bucket) =>
-          byBucket[bucket.id]?.length ? (
-            <CategoryAccordion
-              key={bucket.id}
-              bucket={bucket}
-              issues={byBucket[bucket.id]}
-              initiallyOpen={bucket.id === firstNonEmptyBucketId}
-            />
-          ) : null
-        )}
-      </div>
-    </CollapsibleSection>
-  );
-}
-
-function FilesChanged({ fileStats }) {
-  const rollups = useMemo(() => {
-    if (!fileStats?.length) return null;
-    const totalAdd = fileStats.reduce((s, f) => s + (Number(f.additions) || 0), 0);
-    const totalDel = fileStats.reduce((s, f) => s + (Number(f.deletions) || 0), 0);
-    const withFindings = fileStats.filter((f) => Number(f.issues_count) > 0).length;
-    return { totalAdd, totalDel, withFindings };
-  }, [fileStats]);
-
-  if (!fileStats?.length || !rollups) return null;
-
-  return (
-    <CollapsibleSection
-      idPrefix="files-changed"
-      icon={FileCode}
-      title="Files in this commit"
-      badge={fileStats.length}
-      defaultExpanded={false}
-      summary={
-        <>
-          <span className="tabular-nums text-emerald-700 dark:text-emerald-400">+{rollups.totalAdd}</span>
-          <span aria-hidden="true">·</span>
-          <span className="tabular-nums text-red-600 dark:text-[#ff7b72]">−{rollups.totalDel}</span>
-          {rollups.withFindings > 0 ? (
-            <>
-              <span aria-hidden="true">·</span>
-              <span className="tabular-nums text-amber-900 dark:text-amber-300">
-                {rollups.withFindings} with findings
-              </span>
-            </>
-          ) : null}
-        </>
-      }
-      panelClassName="max-h-72 overflow-y-auto overscroll-contain px-2 pb-3 pt-2 sm:max-h-80 sm:px-4"
-    >
-      <p className="mb-2 px-2 text-[11px] text-desk-muted sm:px-0">
-        Per-file lines added/removed in the GitHub diff — scroll if the commit is large.
-      </p>
-      <div className="grid grid-cols-1 gap-px rounded-lg border border-desk-border bg-desk-border sm:grid-cols-2">
-        {fileStats.map((f, idx) => (
-          <div
-            key={f.file_path || `changed-${idx}`}
-            className="flex min-w-0 flex-col gap-1 bg-desk-panel p-3 sm:flex-row sm:items-center sm:gap-3"
-          >
-            <FileCode size={13} className="shrink-0 text-desk-subtle sm:mt-0" aria-hidden="true" />
-            <span
-              className="min-w-0 flex-1 truncate font-mono text-[12px] text-gray-800 dark:text-gray-200"
-              title={f.file_path}
-            >
-              {f.file_path}
-            </span>
-            <div className="flex shrink-0 flex-wrap items-center gap-x-2 font-mono text-[11px]">
-              <span className="tabular-nums text-emerald-700 dark:text-emerald-400">+{f.additions}</span>
-              <span className="tabular-nums text-red-600 dark:text-[#ff7b72]">−{f.deletions}</span>
-              {f.issues_count > 0 ? (
-                <span className="font-medium text-amber-900 tabular-nums dark:text-amber-300">
-                  {f.issues_count} finding{f.issues_count === 1 ? '' : 's'}
-                </span>
-              ) : null}
-            </div>
-          </div>
-        ))}
-      </div>
-    </CollapsibleSection>
-  );
-}
+import {
+  ANALYSIS_BUCKETS,
+  SEVERITY_ORDER,
+  bucketCategory,
+  bucketCategoryForSeverityJump,
+} from '../features/reviews/analysisConstants';
+import { AnalysisFindingsPanel } from '../features/reviews/components/AnalysisFindingsPanel';
+import { FilesChangedPanel } from '../features/reviews/components/FilesChangedPanel';
+import { queryKeys } from '../lib/queryKeys';
 
 export default function ReviewDetailPage() {
   const { id } = useParams();
@@ -407,15 +38,15 @@ export default function ReviewDetailPage() {
       return reviewsApi.retryPending(id);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['review', id] });
-      queryClient.invalidateQueries({ queryKey: ['reviews'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.reviewDetail(id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.reviewsAll });
     },
   });
 
   const reviewIdPresent = Boolean(id);
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['review', id],
+    queryKey: queryKeys.reviewDetail(id),
     queryFn: () => reviewsApi.getOne(id).then((r) => r.data.data),
     enabled: reviewIdPresent,
     refetchInterval: (query) => {
@@ -437,7 +68,7 @@ export default function ReviewDetailPage() {
     const unsub = onReviewUpdate((update) => {
       const rid = update?.reviewId ?? update?.review_id;
       if (rid != null && String(rid) === String(id)) {
-        queryClient.invalidateQueries({ queryKey: ['review', id] });
+        queryClient.invalidateQueries({ queryKey: queryKeys.reviewDetail(id) });
       }
     });
     return unsub;
@@ -471,7 +102,7 @@ export default function ReviewDetailPage() {
   );
 
   const firstNonEmptyBucketId = useMemo(
-    () => ANALYSIS_BUCKETS.find((b) => byBucket[b.id]?.length > 0)?.id,
+    () => ANALYSIS_BUCKETS.find((b) => (byBucket[b.id] ?? []).length > 0)?.id,
     [byBucket]
   );
 
@@ -514,7 +145,7 @@ export default function ReviewDetailPage() {
           {!is404 && (
             <button
               type="button"
-              onClick={() => queryClient.invalidateQueries({ queryKey: ['review', id] })}
+              onClick={() => queryClient.invalidateQueries({ queryKey: queryKeys.reviewDetail(id) })}
               className="btn-primary inline-flex gap-2"
             >
               <RefreshCw size={14} aria-hidden="true" />
@@ -693,7 +324,7 @@ export default function ReviewDetailPage() {
         </div>
       )}
 
-      <FilesChanged fileStats={fileStats} />
+      <FilesChangedPanel fileStats={fileStats} />
 
       <AnalysisFindingsPanel
         sortedIssues={sortedIssues}

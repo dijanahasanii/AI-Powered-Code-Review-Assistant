@@ -54,7 +54,7 @@ export const SocketProvider = ({ children }) => {
 
     socket.on('connect', () => {
       setConnected(true);
-      socket.emit('join:user', userId);
+      // User room is joined server-side after JWT handshake; only repo rooms are client-requested.
       pendingRepoRoomsRef.current.forEach((repoId) => {
         socket.emit('join:repo', repoId);
       });

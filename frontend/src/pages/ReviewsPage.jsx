@@ -8,6 +8,7 @@ import { reviewsApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { ScoreRing, StatusBadge, EmptyState, PageHeader } from '../components/common/UI';
 import { ReviewCardSkeleton } from '../components/common/Skeletons';
+import { queryKeys } from '../lib/queryKeys';
 
 const STATUS_FILTERS = ['all', 'completed', 'processing', 'pending', 'failed'];
 const LIMIT = 15;
@@ -18,7 +19,7 @@ export default function ReviewsPage() {
   const [page, setPage] = useState(1);
 
   const { data, isLoading, isPlaceholderData, isError, refetch } = useQuery({
-    queryKey: ['reviews', { status, page, limit: LIMIT }],
+    queryKey: queryKeys.reviewsList({ status, page, limit: LIMIT }),
     queryFn: () =>
       reviewsApi.list({ ...(status !== 'all' && { status }), page, limit: LIMIT }).then((r) => r.data),
     placeholderData: (prev) => prev,

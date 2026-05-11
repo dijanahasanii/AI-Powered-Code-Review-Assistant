@@ -18,6 +18,7 @@ import { useSocket } from '../context/SocketContext';
 import CollapsibleSection from '../components/common/CollapsibleSection';
 import { ScoreRing, StatusBadge, PageHeader } from '../components/common/UI';
 import { StatCardSkeleton, DashboardActivitySkeleton } from '../components/common/Skeletons';
+import { queryKeys } from '../lib/queryKeys';
 
 const MetricCard = ({ icon: Icon, label, value, sub, subAccent }) => (
   <div className="card flex flex-col p-4 sm:p-5 card-interactive">
@@ -85,14 +86,14 @@ export default function DashboardPage() {
 
   const { data: stats, isLoading: statsLoading, isError: statsError, refetch: refetchStats } = useQuery(
     {
-      queryKey: ['stats'],
+      queryKey: queryKeys.stats,
       queryFn: () => reviewsApi.getStats().then((r) => r.data.data),
       refetchInterval: pollMs,
     }
   );
 
   const { data: reposData, isLoading: reposLoading } = useQuery({
-    queryKey: ['repos'],
+    queryKey: queryKeys.repos,
     queryFn: () => reposApi.list().then((r) => r.data.data ?? []),
     refetchInterval: pollMs,
   });
@@ -103,25 +104,25 @@ export default function DashboardPage() {
     isError: reviewsError,
     refetch: refetchReviews,
   } = useQuery({
-    queryKey: ['reviews', { page: 1, limit: 8 }],
+    queryKey: queryKeys.reviewsList({ page: 1, limit: 8 }),
     queryFn: () => reviewsApi.list({ page: 1, limit: 8 }).then((r) => r.data),
     refetchInterval: pollMs,
   });
 
   useEffect(() => {
     const unsub = onReviewUpdate(() => {
-      queryClient.invalidateQueries({ queryKey: ['stats'] });
-      queryClient.invalidateQueries({ queryKey: ['reviews'] });
-      queryClient.invalidateQueries({ queryKey: ['repos'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.stats });
+      queryClient.invalidateQueries({ queryKey: queryKeys.reviewsAll });
+      queryClient.invalidateQueries({ queryKey: queryKeys.repos });
     });
     return unsub;
   }, [onReviewUpdate, queryClient]);
 
   useEffect(() => {
     if (!connected) return undefined;
-    queryClient.invalidateQueries({ queryKey: ['stats'] });
-    queryClient.invalidateQueries({ queryKey: ['reviews'] });
-    queryClient.invalidateQueries({ queryKey: ['repos'] });
+    queryClient.invalidateQueries({ queryKey: queryKeys.stats });
+    queryClient.invalidateQueries({ queryKey: queryKeys.reviewsAll });
+    queryClient.invalidateQueries({ queryKey: queryKeys.repos });
     return undefined;
   }, [connected, queryClient]);
 
