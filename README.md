@@ -22,6 +22,7 @@
 13. [End-to-End Flow Summary](#13-end-to-end-flow-summary)
 14. [Quick Start](#14-quick-start)
 15. [Production operations & flows](#15-production-operations--flows)
+16. [Development & reproducibility (supplement)](#16-development--reproducibility-supplement)
 
 ---
 
@@ -543,54 +544,102 @@ Railway supports Node.js apps with Redis and PostgreSQL add-ons:
 - Platform-specific secret managers (Railway env vars, Vercel env vars, GitHub Secrets for CI)
 - Different values per environment (development, staging, production)
 
+See [SECURITY.md](SECURITY.md) for secret handling and vulnerability reporting.
+
 ---
 
 ## 12. Risks & Challenges
 
-### OpenAI API rate limits
+This section is kept aligned with the **current** implementation (not the original thesis prototype). Each item includes a **status** so operators know what is enforced in code versus what remains policy or future hardening.
 
-**Risk**: GPT-4o has rate limits (requests per minute, tokens per minute). High push frequency could exhaust limits.
+### External API throughput (GitHub + job queue)
 
-**Mitigations**:
-- Bull queue naturally serializes jobs — no more than `concurrency: 3` workers at once
-- Exponential backoff on `429` responses (2s, 4s, 8s)
-- Diff truncation reduces token usage per request
-- Monitor usage in OpenAI dashboard; upgrade tier if needed
+**Risk**: Bursting GitHub activity (pushes, large trees) or many concurrent reviews could hit **GitHub REST rate limits** or overload a single worker.
 
-### AI response unpredictability
+**Status**: **Mitigated in code for the paths that exist today** — the production analysis path does **not** call the OpenAI API (`usesOpenAiApi === false` in `getReviewAiRuntimeInfo()`). Throughput limits are mainly **GitHub API** usage and **CPU/IO** during snapshot/rule analysis.
 
-**Risk**: GPT occasionally deviates from the JSON schema despite `json_object` mode.
+**Verified mitigations**:
+- Bull processing uses **`concurrency: 3`** for `analyze` jobs (`reviewJobProcessor.js`).
+- GitHub reads use **`withGithubRetry`** (up to three attempts): non-retryable **`400` / `401` / `403`** fail fast; for **`429`** and transient errors, delay is **`500ms × 2^attempt`** (and **`200ms × attempt`** for other transient failures) before retry — *not* fixed 2s/4s/8s backoff.
+- Repository scanning caps work: **tree/blob limits**, **max files scanned**, and **per-file size caps** (see `githubService.js`, `pathFilter.js`, `repositoryAnalyzer.js`).
 
-**Mitigations**:
-- `response_format: json_object` enforces JSON at API level
-- `parseAIResponse()` normalizes fields to safe defaults
-- 3-attempt retry loop with logging for debugging patterns
-- If all retries fail, review is marked `failed` — doesn't crash the server
+**Residual risk**: Heavy concurrent org-wide activity can still exhaust GitHub quota — monitor GitHub **`X-RateLimit-*`** responses and consider **fewer workers**, **Redis-backed queue tuning**, or **GitHub Apps** with higher limits for large installations.
 
-### GitHub webhook security
+---
 
-**Risk**: An attacker could forge webhook requests to inject fake reviews.
+### Analysis consistency (rules + snapshot, not LLM JSON)
 
-**Mitigation**: HMAC-SHA256 signature verification using `crypto.timingSafeEqual()` on the raw request body. Requests without a valid signature are rejected with `401` before any DB writes occur.
+**Risk**: Earlier designs relied on an LLM returning strict JSON; malformed output could break persistence.
 
-### Token security
+**Status**: **Resolved for that specific failure mode** — reviews use deterministic **static rules**, **diff heuristics**, and optional **repository snapshot** analysis. There is no **`response_format: json_object`** path in the current `openaiService.js` analysis flow.
 
-**Risk**: GitHub OAuth tokens stored in the database could be compromised.
+**Verified mitigations**:
+- Output is shaped to what **`finalizeReview`** expects (summary, score, issues, positives).
+- Worker **`try/catch`** marks reviews **`failed`** and emits **`review:update`** instead of crashing the process.
 
-**Mitigation**:
-- In production, encrypt the `access_token` column using AES-256 before storing
-- Use HTTPS everywhere (Vercel and Railway enforce this)
-- JWT tokens expire in 7 days and must be refreshed via re-login
+**Residual risk**: **Quality/coverage** of findings is heuristic-driven, not “single JSON schema parse” — tune rules and snapshots rather than JSON parsers.
 
-### Scalability concerns
+---
 
-**Risk**: As review volume grows, the single Node.js process and queue may become a bottleneck.
+### GitHub webhook authenticity
 
-**Mitigations**:
-- Bull supports running multiple worker processes — scale horizontally by adding worker instances
-- Supabase PostgreSQL can be upgraded to larger compute tiers
-- Stateless backend design means multiple instances can run behind a load balancer
-- WebSocket rooms prevent broadcasting unnecessary events to all users
+**Risk**: An attacker could forge webhook POSTs and create bogus reviews or load the queue.
+
+**Status**: **Resolved** for signature verification.
+
+**Verified behavior** (`webhookController.js` + `server.js`):
+- **`X-Hub-Signature-256`** validated with **HMAC-SHA256** over the **raw body**; compared with **`crypto.timingSafeEqual`** (length-checked).
+- Invalid or missing signatures → **`401`** before enqueue or DB writes.
+- **`express.raw`** is applied only under **`/api/webhooks`** so the signing payload matches GitHub’s bytes.
+- Global API rate limiting **skips** `/api/webhooks` (and `/health`) so legitimate GitHub delivery bursts are not dropped as “API abuse” (`rateLimiter.js`).
+
+**Residual risk**: **Compromised `GITHUB_WEBHOOK_SECRET`** or **leaked raw body middleware order** — protect secrets and keep the raw-parser route ordering as documented above.
+
+---
+
+### Session and stored GitHub token security
+
+**Risk**: Stolen **GitHub OAuth tokens** in `users.access_token` allow API access as the user; stolen **app JWTs** allow dashboard/API access until expiry.
+
+**Status**: **Partially mitigated** — **HTTPS**, **application JWTs**, and **strong `JWT_SECRET` enforcement** are in place; **database encryption of `access_token` is not implemented** (tokens are stored as plaintext in PostgreSQL).
+
+**Verified mitigations**:
+- App JWT: **`jwt.sign(..., { expiresIn: process.env.JWT_EXPIRES_IN || '7d' })`** — refresh by re-running OAuth when the token expires.
+- Login path refuses weak config: **`JWT_SECRET`** must exist and be **≥ 16 characters** (`authController.js`).
+- Host **HTTPS** (e.g. Railway/Vercel) protects tokens in transit.
+
+**Open hardening (not implemented; requires careful rollout)**:
+- **Encrypt `access_token` at the application layer** (e.g. AES-256-GCM with a **`TOKEN_ENCRYPTION_KEY`**) with **backwards compatibility** for existing rows, or use a **secrets manager** / **vault** for the column.
+- Restrict **Supabase dashboard / service role** access and rotate keys on any suspicion of DB exposure.
+
+---
+
+### Scalability, workers, and realtime fan-out
+
+**Risk**: A single Node process or one worker tier may become a bottleneck; broadcasting events to every client would not scale.
+
+**Status**: **Architecturally addressed**; actual headroom depends on hosting.
+
+**Verified mitigations**:
+- **Bull + Redis**: jobs persist and retry (**`attempts: 3`**, exponential **`backoff`** on the queue — `reviewQueue.js`); multiple worker processes can consume the same queue.
+- **Socket.IO**: after handshake, each socket joins **`user:<userId>`**; optional **`join:repo`** only succeeds if Supabase shows the repo’s **`user_id`** matches the socket user (`registerSocketIO.js`). Review updates target user/repo rooms instead of global broadcast.
+
+**Residual risk**: **Horizontal scaling** of Socket.IO may require **sticky sessions** or a **Redis adapter** for multi-instance emit — not required for a single-node deployment.
+
+---
+
+### Test coverage and API contract drift
+
+**Risk**: Backend-heavy tests with a thin frontend suite let UI regressions ship; divergent response shapes break the dashboard.
+
+**Status**: **Partially mitigated**.
+
+**Verified mitigations**:
+- Backend: **Jest** API and socket tests (`backend/src/__tests__/`).
+- Frontend: **Vitest + React Testing Library** behavioral tests for repositories, reviews, and detail flows; CI runs **`npm test -- --run`** with raised Node heap to avoid OOM (`ci.yml`).
+- **`frontend/src/api/contractGuard.js`** (and tests) help catch response shape drift for selected payloads.
+
+**Residual risk**: **End-to-end** (e.g. Playwright) for **full auth redirect** and cross-browser flows is not a focus of the current unit/RTL suite — add E2E before a high-stakes production cutover.
 
 ---
 
@@ -603,13 +652,13 @@ Here is the complete journey from a code push to seeing results in the dashboard
 3. **Backend verifies the signature** using HMAC-SHA256 to confirm it genuinely came from GitHub
 4. **Backend creates a review record** in the database with `status: pending`, then adds a job to the Redis queue and immediately returns `200 OK` to GitHub
 5. **Queue worker picks up the job** and changes the status to `processing`
-6. **Worker fetches the git diff** for that specific commit from the GitHub API
-7. **Worker builds an AI prompt** containing the diff text and repository context
-8. **OpenAI GPT-4o analyzes the diff** and returns a structured JSON object with a quality score, summary, and list of issues
+6. **Worker fetches the git diff** for that specific commit from the GitHub API (when available)
+7. **Worker runs the analysis pipeline** — repository snapshot + static rules and diff heuristics (no OpenAI call in the current `usesOpenAiApi === false` configuration)
+8. **Analysis produces** a quality score, summary, and structured issues list for persistence
 9. **Worker saves the results**: updates the review with the score and summary, inserts all issues into `review_issues`
 10. **Worker emits a WebSocket event** (`review:update`) to the relevant Socket.io room
 11. **React Dashboard receives the event** in real time and invalidates the React Query cache
-12. **Dashboard re-renders** showing the completed review with score ring, issues list, file stats, and AI summary
+12. **Dashboard re-renders** showing the completed review with score ring, issues list, file stats, and summary
 13. **If it was a PR**, the worker also posts inline comments directly back to the GitHub pull request
 
 The entire pipeline from push to results appearing on the dashboard typically takes **15–30 seconds**.
@@ -620,11 +669,11 @@ The entire pipeline from push to results appearing on the dashboard typically ta
 
 ### Prerequisites
 
-- Node.js ≥ 18
-- Redis (local or cloud)
-- Supabase account (free tier)
-- OpenAI API key
-- GitHub OAuth App
+- **Node.js 20 LTS** (matches CI and Docker; `.nvmrc` contains `20` — Node 18 may work but is not what CI runs)
+- **npm** (bundled with Node)
+- **Redis** — only if you set `QUEUE_DRIVER=redis` (see `backend/.env.example`). Default: in-process queue, no Redis
+- **Supabase** project (free tier is enough)
+- **GitHub OAuth App** (for login and repo access)
 
 ### 1. Clone and install
 
@@ -644,7 +693,13 @@ cp backend/.env.example backend/.env
 # Frontend
 cp frontend/.env.example frontend/.env
 # Edit frontend/.env with your values
+
+npm run verify:setup
 ```
+
+Checks Node 20 parity, required Supabase + JWT keys in `backend/.env`, and warns on missing GitHub / frontend OAuth values.
+
+For **CORS, Socket.IO, and OAuth** when testing from a LAN IP, IPv6 loopback, or a custom local hostname, see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) (section *Browser origins*).
 
 ### 3. Set up the database
 
@@ -657,6 +712,12 @@ npm run dev
 # Backend runs on :3001
 # Frontend runs on :5173
 ```
+
+Smoke check: `curl -s http://localhost:3001/health` (or open in a browser) should return JSON with `"status":"ok"`.
+
+### 4b. Docker Compose (optional)
+
+`docker-compose.yml` runs **Redis**, the **backend** (`QUEUE_DRIVER=redis`), and the **Vite** dev server. It does **not** replace Supabase: copy `backend/.env.example` → `backend/.env` with real `SUPABASE_URL` and `SUPABASE_SERVICE_KEY` before `docker compose up`. See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for Compose version notes (`env_file` / `required: false`).
 
 ### 5. Expose backend for GitHub webhooks (development)
 
@@ -682,7 +743,7 @@ High-level behavior you can rely on when operating or debugging this stack.
 ### Review lifecycle
 
 1. A row is created in `code_reviews` with `status: pending` (manual trigger, webhook, or duplicate-commit resolution).
-2. Work is **queued**: either **in-process** (`QUEUE` not using Redis / inline mode) or **Bull + Redis** (`reviewQueue.add`).
+2. Work is **queued**: either **in-process** (`QUEUE_DRIVER` unset or not `redis`) or **Bull + Redis** (`reviewQueue.add`).
 3. The worker loads the diff (GitHub API), runs analysis (OpenAI / rules), writes `review_issues` and `review_file_stats`, sets `status: completed` or `failed`, and emits **`review:update`** over Socket.io.
 
 ### GitHub → webhook → review
@@ -700,6 +761,12 @@ High-level behavior you can rely on when operating or debugging this stack.
 
 - **Redis + Bull**: jobs are persisted and retried per Bull settings; logs include **`jobId`** when enqueued.
 - **Inline**: jobs run immediately in a detached promise on the API process; logs tag **`reviewId` / `repositoryId`** for correlation.
+
+---
+
+## 16. Development & reproducibility (supplement)
+
+For a **clean-machine checklist**, Docker Compose behavior, CI parity with Node 20, **browser origins (CORS / Socket.IO / OAuth, LAN testing, `FRONTEND_DEV_EXTRA_ORIGINS`)**, and operational security notes, see **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)** and **[SECURITY.md](SECURITY.md)**.
 
 ---
 
@@ -728,7 +795,7 @@ ai-code-review/
 │   ├── Dockerfile
 │   ├── nginx.conf
 │   └── package.json
-├── docker-compose.yml
+├── docker-compose.yml    # Redis + dev backend/frontend (Supabase still required)
 ├── package.json
 └── README.md             ← this file
 ```

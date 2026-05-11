@@ -3,7 +3,12 @@ const jwt = require('jsonwebtoken');
 const { supabase } = require('../config/database');
 const { AppError } = require('../middleware/errorHandler');
 const { logger } = require('../utils/logger');
-const { primaryFrontendBase, browserOrigin, allFrontendBaseStrings } = require('../utils/frontendOrigins');
+const {
+  primaryFrontendBase,
+  browserOrigin,
+  allFrontendBaseStrings,
+  isDevelopmentRelaxedOrigin,
+} = require('../utils/frontendOrigins');
 
 function githubOAuthRedirectUri() {
   return `${primaryFrontendBase(process.env.FRONTEND_URL)}/auth/callback`;
@@ -36,9 +41,12 @@ function githubTokenExchangeRedirectUri(queryRedirectUri) {
     }
   }
 
-  const devMatches =
-    process.env.NODE_ENV !== 'production' &&
-    (candidate.hostname === 'localhost' || candidate.hostname === '127.0.0.1');
+  // Keep in sync with CORS / Socket.IO: same dev-only rules as `isAllowedFrontendOrigin`.
+  const devMatches = isDevelopmentRelaxedOrigin(
+    candOrigin,
+    process.env.NODE_ENV,
+    process.env.FRONTEND_DEV_EXTRA_ORIGINS
+  );
 
   if (!envMatches && !devMatches) return fallback;
 

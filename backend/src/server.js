@@ -34,7 +34,7 @@ function resolveCorsOrigin(origin, cb) {
   );
 }
 
-/** Best-effort production warnings (does not block startup — DATABASE_URL validates elsewhere). */
+/** Best-effort production warnings (does not block startup). */
 function logProductionDeploymentHints() {
   if (process.env.NODE_ENV !== 'production') return;
 

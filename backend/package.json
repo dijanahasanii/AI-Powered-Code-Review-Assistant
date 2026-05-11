@@ -9,8 +9,6 @@
     "test": "jest --runInBand",
     "test:watch": "jest --watch",
     "lint": "eslint src --ext .js --max-warnings 200",
-    "db:migrate": "node src/config/migrate.js",
-    "db:seed": "node src/config/seed.js",
     "sync-ngrok": "node scripts/sync-ngrok-url.js"
   },
   "dependencies": {
@@ -39,6 +37,6 @@
     "supertest": "^6.3.4"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.0.0"
   }
 }

@@ -2,6 +2,9 @@
   "name": "ai-code-review-frontend",
   "version": "1.0.0",
   "description": "AI-Powered Code Review Assistant — React Dashboard",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",

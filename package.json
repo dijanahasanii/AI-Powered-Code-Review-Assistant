@@ -3,11 +3,15 @@
   "version": "1.0.0",
   "description": "AI-Powered Code Review Assistant — Bachelor Thesis Project",
   "private": true,
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "scripts": {
     "dev:backend": "cd backend && npm run dev",
     "dev:frontend": "cd frontend && npm run dev",
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
     "install:all": "cd backend && npm install && cd ../frontend && npm install",
+    "verify:setup": "node scripts/verify-setup.js",
     "test:backend": "cd backend && npm test",
     "build:frontend": "cd frontend && npm run build"
   },

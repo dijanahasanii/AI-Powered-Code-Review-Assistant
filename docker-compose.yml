@@ -1,25 +1,13 @@
-version: '3.9'
+# Local full stack: Redis + Bull worker + Express + Vite.
+#
+# The app persists data through Supabase (PostgREST), not a bundled Postgres container.
+# Create backend/.env and frontend/.env from *.env.example before first run, or rely on
+# optional env_file (Docker Compose v2.24+). Minimum for backend: SUPABASE_URL,
+# SUPABASE_SERVICE_KEY, JWT_SECRET (>= 16 chars), GITHUB_* and BACKEND_URL for OAuth/webhooks.
+#
+# https://docs.docker.com/compose/compose-file/05-services/#env_file
 
 services:
-  # ── PostgreSQL (local dev — use Supabase in production) ───────────────────
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_DB: code_review_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-    ports:
-      - '5432:5432'
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./backend/src/config/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
-    healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U postgres']
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
-  # ── Redis (for Bull job queue) ────────────────────────────────────────────
   redis:
     image: redis:7-alpine
     ports:
@@ -32,7 +20,6 @@ services:
       timeout: 3s
       retries: 5
 
-  # ── Backend ───────────────────────────────────────────────────────────────
   backend:
     build:
       context: ./backend
@@ -42,23 +29,20 @@ services:
     environment:
       - NODE_ENV=development
       - PORT=3001
-      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/code_review_db
+      - QUEUE_DRIVER=redis
       - REDIS_URL=redis://redis:6379
     env_file:
-      - ./backend/.env
+      - path: ./backend/.env
+        required: false
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_healthy
     volumes:
       - ./backend:/app
       - /app/node_modules
-    command: npm run dev
+    # Bind mount hides image node_modules; npm ci restores devDependencies in the anonymous volume.
+    command: ["sh", "-c", "npm ci && npm run dev"]
 
-  # ── Frontend ──────────────────────────────────────────────────────────────
-  # Dev stack: overrides below run Vite on :5173. The Dockerfile multi-stage builds Nginx (:80)
-  # proxying `/api` + `/socket.io` → `backend`; for that production image, omit VITE_* and publish :80.
   frontend:
     build:
       context: ./frontend
@@ -69,12 +53,12 @@ services:
       - VITE_API_URL=http://localhost:3001
       - VITE_WS_URL=http://localhost:3001
     env_file:
-      - ./frontend/.env
+      - path: ./frontend/.env
+        required: false
     volumes:
       - ./frontend:/app
       - /app/node_modules
-    command: npm run dev -- --host
+    command: ["sh", "-c", "npm ci && npm run dev -- --host"]
 
 volumes:
-  postgres_data:
   redis_data:
