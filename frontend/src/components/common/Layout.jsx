@@ -1,19 +1,15 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { Outlet, NavLink, useNavigate, Link, useLocation } from 'react-router-dom';
 import {
   GitBranch,
   ClipboardList,
   LogOut,
-  Wifi,
   WifiOff,
   Menu,
   X,
   FlaskConical,
   Settings,
   ChevronRight,
-  Sun,
-  Moon,
-  Monitor,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuth } from '../../context/AuthContext';
@@ -60,15 +56,50 @@ function useWorkspaceBreadcrumbs() {
   }, [pathname]);
 }
 
+/** Shown only when signed in and realtime is disconnected (avoids flash before first connect). */
+function RealtimeUpdatesBanner() {
+  const { user } = useAuth();
+  const { connected } = useSocket();
+  const [visible, setVisible] = useState(false);
+  const timerRef = useRef(null);
+
+  useEffect(() => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    if (!user || connected) {
+      setVisible(false);
+      return undefined;
+    }
+    timerRef.current = setTimeout(() => setVisible(true), 650);
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, [user, connected]);
+
+  if (!user || !visible || connected) return null;
+
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="flex shrink-0 items-center gap-3 border-b border-amber-500/25 bg-amber-500/[0.08] px-4 py-2.5 sm:px-6"
+    >
+      <WifiOff size={16} className="shrink-0 text-amber-800 dark:text-amber-400/95" aria-hidden="true" />
+      <p className="text-[13px] leading-snug text-amber-950 dark:text-amber-100">
+        Live updates paused — reconnecting. Analysis status may refresh a little slower until the connection is restored.
+      </p>
+    </div>
+  );
+}
+
 function WorkspaceChromeBar() {
   const crumbs = useWorkspaceBreadcrumbs();
   const { pathname } = useLocation();
-  const suffix =
-    pathname === '/settings'
-      ? 'preferences'
-      : pathname.startsWith('/reviews/')
-        ? pathname.split('/').pop()?.slice(0, 8) ?? ''
-        : '';
+  const suffix = pathname.startsWith('/reviews/')
+    ? pathname.split('/').pop()?.slice(0, 8) ?? ''
+    : '';
 
   return (
     <header
@@ -93,7 +124,7 @@ function WorkspaceChromeBar() {
       </nav>
       {suffix ? (
         <span className="ml-6 hidden max-w-xs truncate rounded-md border border-desk-border bg-desk-canvas px-3 py-1 font-mono text-[11px] text-desk-muted lg:inline-block">
-          {suffix === 'preferences' ? 'Account · appearance · shortcuts' : `id ${suffix}`}
+          {`id ${suffix}`}
         </span>
       ) : null}
     </header>
@@ -102,21 +133,12 @@ function WorkspaceChromeBar() {
 
 function NavContent({ onNavClick }) {
   const { user, logout } = useAuth();
-  const { connected } = useSocket();
-  const { theme, setTheme } = useUiPreferences();
   const navigate = useNavigate();
 
   const handleLogout = () => {
     logout();
     navigate('/', { replace: true });
   };
-
-  const cycleTheme = () => {
-    const order = ['light', 'dark', 'system'];
-    const i = order.indexOf(theme);
-    setTheme(order[(i + 1) % 3] ?? 'system');
-  };
-  const ThemeIcon = theme === 'light' ? Sun : theme === 'dark' ? Moon : Monitor;
 
   return (
     <div className="flex h-full flex-col">
@@ -180,31 +202,6 @@ function NavContent({ onNavClick }) {
       </nav>
 
       <div className="shrink-0 space-y-2 border-t border-black/10 px-2 py-4 dark:border-white/10">
-        <div className="mx-1 flex items-center justify-between gap-2 rounded-xl border border-desk-border bg-desk-canvas px-2 py-2">
-          <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-desk-muted">Theme</span>
-          <button
-            type="button"
-            onClick={cycleTheme}
-            aria-label={`Color theme: ${theme}. Click to cycle light, dark, or system.`}
-            className="rounded-lg p-1.5 text-desk-muted transition-colors hover:bg-desk-panel hover:text-gray-900 dark:hover:text-gray-100"
-          >
-            <ThemeIcon size={16} aria-hidden="true" />
-          </button>
-        </div>
-        <div
-          className={clsx(
-            'mx-1 flex items-center gap-2 rounded-lg border px-2.5 py-2 font-mono text-[10px] font-medium uppercase tracking-wider tabular-nums',
-            connected
-              ? 'border-emerald-600/30 bg-emerald-500/[0.12] text-emerald-900 dark:border-emerald-500/30 dark:bg-emerald-500/[0.1] dark:text-emerald-400/95'
-              : 'border-desk-border bg-desk-canvas text-desk-muted'
-          )}
-          aria-live="polite"
-          aria-label={connected ? 'Live updates enabled' : 'Disconnected from live updates'}
-        >
-          {connected ? <Wifi size={12} aria-hidden="true" /> : <WifiOff size={12} aria-hidden="true" />}
-          {connected ? 'Socket live' : 'Offline'}
-        </div>
-
         {user && (
           <div className="mx-1 flex items-center gap-2.5 rounded-xl border border-desk-border bg-desk-canvas px-2 py-2">
             <Avatar src={user.avatarUrl} alt={user.username} size={30} />
@@ -286,6 +283,8 @@ export default function Layout() {
         </header>
 
         <WorkspaceChromeBar />
+
+        <RealtimeUpdatesBanner />
 
         <main
           data-density={density}

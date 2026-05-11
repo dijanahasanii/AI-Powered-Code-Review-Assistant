@@ -62,10 +62,10 @@ export const Spinner = ({ size = 'md', className = '' }) => {
 
 // ── Empty state ───────────────────────────────────────────────────────────────
 export const EmptyState = ({ icon: Icon, title, description, action }) => (
-  <div className="flex flex-col items-center justify-center py-16 text-center px-4">
+  <div className="flex flex-col items-center justify-center px-4 py-16 text-center">
     {Icon && (
-      <div className="w-12 h-12 rounded-2xl bg-gray-800 flex items-center justify-center mb-4">
-        <Icon size={22} className="text-gray-500" aria-hidden="true" />
+      <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl border border-desk-border bg-desk-elevated/60 dark:bg-gray-800">
+        <Icon size={22} className="text-desk-muted dark:text-gray-400" aria-hidden="true" />
       </div>
     )}
     <h3 className="mb-1 text-sm font-medium text-gray-800 dark:text-gray-300">{title}</h3>
@@ -129,7 +129,7 @@ export const ScoreRing = ({ score, size = 64 }) => {
 };
 
 // ── Page header ───────────────────────────────────────────────────────────────
-export const PageHeader = ({ title, description, action }) => (
+export const PageHeader = ({ title, description, hint, action }) => (
   <div className="mb-10 flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
     <div className="min-w-0">
       <h1 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-gray-50 sm:text-[1.65rem] sm:leading-snug">
@@ -137,6 +137,9 @@ export const PageHeader = ({ title, description, action }) => (
       </h1>
       {description && (
         <p className="mt-2 max-w-2xl text-[15px] leading-relaxed text-desk-muted md:text-[0.9375rem]">{description}</p>
+      )}
+      {hint && (
+        <p className="mt-2 max-w-2xl text-[13px] leading-snug text-desk-muted">{hint}</p>
       )}
     </div>
     {action && <div className="shrink-0">{action}</div>}

@@ -13,7 +13,9 @@ import {
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import clsx from 'clsx';
 import { reviewsApi, reposApi } from '../api/client';
+import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
+import CollapsibleSection from '../components/common/CollapsibleSection';
 import { ScoreRing, StatusBadge, PageHeader } from '../components/common/UI';
 import { StatCardSkeleton, DashboardActivitySkeleton } from '../components/common/Skeletons';
 
@@ -56,7 +58,26 @@ const buildChartData = (issues = {}) => [
   { name: 'Suggest', value: issues.suggestion || 0, color: '#a371f7' },
 ];
 
+function findingsMixSummary(chartRows) {
+  const rows = chartRows ?? [];
+  const total = rows.reduce((s, r) => s + Number(r.value || 0), 0);
+  if (!total) return <>No findings in aggregated stats yet.</>;
+  const parts = rows.filter((r) => Number(r.value) > 0).map((r) => `${r.name} ${Number(r.value).toLocaleString()}`);
+  return (
+    <>
+      {total.toLocaleString()} total
+      {parts.length ? (
+        <>
+          <span aria-hidden="true"> · </span>
+          <span>{parts.join(' · ')}</span>
+        </>
+      ) : null}
+    </>
+  );
+}
+
 export default function DashboardPage() {
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const { connected, onReviewUpdate } = useSocket();
 
@@ -121,6 +142,11 @@ export default function DashboardPage() {
       <PageHeader
         title="Dashboard"
         description="High-level signals across scans, repos, and review queue health."
+        hint={
+          user?.username
+            ? `Workspace for @${user.username}. Totals include all linked repos.`
+            : 'Totals reflect every repo linked from this workspace.'
+        }
       />
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
@@ -201,59 +227,65 @@ export default function DashboardPage() {
         ) : null}
       </div>
 
-      <div className="mt-8 grid grid-cols-1 gap-4 lg:grid-cols-5 lg:gap-6">
-        <div className="card p-4 sm:p-5 lg:col-span-2">
-          <h2 className="mb-1 text-[13px] font-semibold text-gray-900 dark:text-gray-100">Findings mix</h2>
-          <p className="mb-4 text-[11px] text-desk-muted">Issue counts by severity in your workspace</p>
+      <div className="mt-8 grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-6 lg:items-stretch">
+        <div className="flex min-h-0 flex-col lg:h-full">
           {statsError ? (
-            <p className="text-xs text-desk-muted">Chart waits for stats.</p>
+            <div className="card flex min-h-[12rem] flex-1 flex-col p-5 lg:min-h-0">
+              <p className="text-xs text-desk-muted">
+                Severity mix chart needs stats — use Retry on the banner above when it appears.
+              </p>
+            </div>
           ) : statsLoading ? (
-            <div className="h-44 animate-pulse rounded-md bg-desk-elevated/60" aria-hidden="true" />
+            <div className="card flex min-h-[16rem] flex-1 flex-col space-y-3 p-5 lg:min-h-0">
+              <div className="h-4 w-32 animate-pulse rounded bg-desk-elevated/80" aria-hidden="true" />
+              <div className="min-h-0 flex-1 animate-pulse rounded-md bg-desk-elevated/60" aria-hidden="true" />
+            </div>
           ) : (
-            <ResponsiveContainer width="100%" height={176}>
-              <BarChart data={chartData} barSize={22} margin={{ top: 4, right: 4, bottom: 0, left: -12 }}>
-                <XAxis
-                  dataKey="name"
-                  tick={{ fill: '#57606a', fontSize: 10 }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  tick={{ fill: '#57606a', fontSize: 10 }}
-                  axisLine={false}
-                  tickLine={false}
-                  allowDecimals={false}
-                  width={28}
-                />
-                <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(87, 96, 106, 0.12)' }} />
-                <Bar dataKey="value" radius={[3, 3, 0, 0]}>
-                  {chartData.map((entry) => (
-                    <Cell key={entry.name} fill={entry.color} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+            <CollapsibleSection
+              idPrefix="dash-findings-mix"
+              className="!mb-0 flex min-h-[16rem] flex-1 flex-col lg:min-h-0"
+              icon={BarChart3}
+              title="Findings mix"
+              badge={totalIssues}
+              expandable={false}
+              summary={findingsMixSummary(chartData)}
+              panelClassName="flex min-h-0 flex-1 flex-col p-4 sm:p-5"
+            >
+              <p className="mb-4 shrink-0 text-[11px] text-desk-muted">
+                Issue counts by severity across your workspace (aggregated stats).
+              </p>
+              <div className="min-h-[176px] w-full min-w-0 flex-1 lg:min-h-0">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={chartData} barSize={22} margin={{ top: 4, right: 4, bottom: 0, left: -12 }}>
+                    <XAxis
+                      dataKey="name"
+                      tick={{ fill: '#57606a', fontSize: 10 }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <YAxis
+                      tick={{ fill: '#57606a', fontSize: 10 }}
+                      axisLine={false}
+                      tickLine={false}
+                      allowDecimals={false}
+                      width={28}
+                    />
+                    <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(87, 96, 106, 0.12)' }} />
+                    <Bar dataKey="value" radius={[3, 3, 0, 0]}>
+                      {chartData.map((entry) => (
+                        <Cell key={entry.name} fill={entry.color} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </CollapsibleSection>
           )}
         </div>
 
-        <div className="card overflow-hidden lg:col-span-3">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-desk-border px-4 py-3 sm:px-5">
-            <div>
-              <h2 className="text-[13px] font-semibold text-gray-900 dark:text-gray-100">Recent activity</h2>
-              <p className="mt-0.5 text-[11px] text-desk-muted">
-                Latest analyses — drill in for findings and matched lines
-              </p>
-            </div>
-            <Link
-              to="/reviews"
-              className="text-[12px] font-medium text-brand-700 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300"
-            >
-              Reviews →
-            </Link>
-          </div>
-
+        <div className="card flex min-h-0 flex-col overflow-hidden p-0 lg:mb-0 lg:h-full">
           {reviewsError ? (
-            <div className="px-4 py-12 text-center sm:px-5">
+            <div className="flex flex-1 flex-col justify-center border-b border-transparent px-4 py-12 text-center sm:px-5">
               <p className="text-sm text-red-800 dark:text-red-300">Could not load recent activity.</p>
               <button
                 type="button"
@@ -264,15 +296,15 @@ export default function DashboardPage() {
               </button>
             </div>
           ) : reviewsLoading ? (
-            <div className="grid gap-px bg-desk-border p-px sm:grid-cols-2">
+            <div className="grid min-h-[16rem] flex-1 grid-cols-1 gap-px overflow-hidden bg-desk-border p-px sm:min-h-0 sm:grid-cols-2 sm:[grid-template-rows:repeat(2,minmax(0,1fr))]">
               {Array.from({ length: 4 }).map((_, i) => (
                 <DashboardActivitySkeleton key={i} />
               ))}
             </div>
           ) : reviews.length === 0 ? (
-            <div className="px-4 py-14 text-center sm:px-5">
+            <div className="flex flex-1 flex-col justify-center px-4 py-14 text-center sm:px-5">
               <p className="text-sm text-gray-600 dark:text-gray-400">Nothing in the timeline yet.</p>
-              <p className="mt-1 max-w-md text-xs text-desk-muted mx-auto">
+              <p className="mx-auto mt-1 max-w-md text-xs text-desk-muted">
                 Connect a repo and enqueue a scan — activity cards land here automatically.
               </p>
               <Link
@@ -283,35 +315,68 @@ export default function DashboardPage() {
               </Link>
             </div>
           ) : (
-            <div className="grid gap-px bg-desk-border p-px sm:grid-cols-2">
-              {reviews.map((review) => (
+            <CollapsibleSection
+              variant="plain"
+              idPrefix="dash-recent-activity"
+              className="flex min-h-[16rem] flex-1 flex-col overflow-hidden lg:min-h-0"
+              icon={Activity}
+              title="Recent activity"
+              badge={reviews.length}
+              expandable={false}
+              summary={
+                <>
+                  Showing up to {reviews.length} run{reviews.length !== 1 ? 's' : ''} · Latest{' '}
+                  {reviews[0]?.created_at
+                    ? safeDistanceToNow(reviews[0].created_at)
+                    : '—'}
+                </>
+              }
+              controls={
                 <Link
-                  key={review.id}
-                  to={`/reviews/${review.id}`}
-                  className="group flex flex-col bg-desk-panel p-4 transition-colors hover:bg-desk-elevated sm:p-5"
+                  to="/reviews"
+                  className="text-[12px] font-medium text-brand-700 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300"
                 >
-                  <div className="flex items-start gap-4">
-                    <ScoreRing score={review.overall_score} size={40} />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="inline-flex items-center gap-1.5 font-mono text-[13px] font-medium text-gray-900 dark:text-gray-100">
-                          <GitCommit size={13} className="text-desk-muted" aria-hidden="true" />
-                          {review.commit_sha?.slice(0, 7) ?? '—'}
-                        </span>
-                        <StatusBadge status={review.status} compact />
-                      </div>
-                      <p className="mt-2 truncate font-mono text-[11px] text-desk-muted">
-                        {review.repositories?.full_name}
-                        {review.branch ? ` · ${review.branch}` : ''}
-                      </p>
-                    </div>
-                  </div>
-                  <p className="mt-auto pt-4 text-[11px] text-gray-600 dark:text-desk-subtle">
-                    {safeDistanceToNow(review.created_at)}
-                  </p>
+                  Reviews →
                 </Link>
-              ))}
-            </div>
+              }
+              panelClassName="flex min-h-0 flex-1 flex-col overflow-hidden border-t border-desk-border"
+            >
+              <div className="grid min-h-0 flex-1 grid-cols-1 gap-px overflow-y-auto overscroll-contain bg-desk-border p-px sm:grid-cols-2 sm:overflow-hidden sm:[grid-template-rows:repeat(2,minmax(0,1fr))]">
+                {reviews.map((review) => (
+                  <Link
+                    key={review.id}
+                    to={`/reviews/${review.id}`}
+                    className="group flex min-h-[7.5rem] flex-col bg-desk-panel p-4 transition-colors hover:bg-desk-elevated sm:h-full sm:min-h-0 sm:p-5"
+                  >
+                    <div className="flex min-h-0 flex-1 items-start gap-4">
+                      <ScoreRing score={review.overall_score} size={40} />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="inline-flex items-center gap-1.5 font-mono text-[13px] font-medium text-gray-900 dark:text-gray-100">
+                            <GitCommit size={13} className="text-desk-muted" aria-hidden="true" />
+                            {review.commit_sha?.slice(0, 7) ?? '—'}
+                          </span>
+                          <StatusBadge status={review.status} compact />
+                        </div>
+                        <p
+                          className="mt-2 truncate font-mono text-[11px] text-desk-muted"
+                          title={
+                            `${review.repositories?.full_name ?? ''}${review.branch ? ` · ${review.branch}` : ''}` ||
+                            undefined
+                          }
+                        >
+                          {review.repositories?.full_name}
+                          {review.branch ? ` · ${review.branch}` : ''}
+                        </p>
+                      </div>
+                    </div>
+                    <p className="mt-auto shrink-0 pt-4 text-[11px] text-gray-600 dark:text-desk-subtle">
+                      {safeDistanceToNow(review.created_at)}
+                    </p>
+                  </Link>
+                ))}
+              </div>
+            </CollapsibleSection>
           )}
         </div>
       </div>

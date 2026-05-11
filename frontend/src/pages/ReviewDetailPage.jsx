@@ -24,6 +24,7 @@ import clsx from 'clsx';
 import { reviewsApi } from '../api/client';
 import { useSocket } from '../context/SocketContext';
 import { ScoreRing, SeverityBadge, StatusBadge, Spinner } from '../components/common/UI';
+import CollapsibleSection from '../components/common/CollapsibleSection';
 import { ReviewDetailSkeleton } from '../components/common/Skeletons';
 
 const SEVERITY_META = {
@@ -273,8 +274,6 @@ const SEVERITY_ROLLUP_LABEL = {
 };
 
 function AnalysisFindingsPanel({ sortedIssues, byBucket, firstNonEmptyBucketId }) {
-  const [expanded, setExpanded] = useState(false);
-
   const rollups = useMemo(() => {
     if (!sortedIssues.length) return null;
     const bySev = { critical: 0, warning: 0, info: 0, suggestion: 0 };
@@ -291,74 +290,45 @@ function AnalysisFindingsPanel({ sortedIssues, byBucket, firstNonEmptyBucketId }
   if (!sortedIssues.length || !rollups) return null;
 
   return (
-    <section className="card mb-6 overflow-hidden p-0" aria-label="Analysis findings">
-      <button
-        type="button"
-        id="analysis-findings-toggle"
-        aria-expanded={expanded}
-        aria-controls="analysis-findings-panel"
-        onClick={() => setExpanded((v) => !v)}
-        className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-desk-elevated/45 sm:px-5"
-      >
-        <ClipboardList size={18} className="shrink-0 text-desk-muted" aria-hidden="true" />
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-desk-muted">
-              Analysis findings
-            </span>
-            <span className="rounded-full border border-desk-border bg-desk-canvas px-2 py-0.5 font-mono text-[11px] font-medium tabular-nums text-gray-800 dark:text-gray-200">
-              {sortedIssues.length}
-            </span>
-          </div>
-          <p className="mt-1 text-[12px] text-desk-muted">
-            {rollups.themeGroups} theme group{rollups.themeGroups !== 1 ? 's' : ''}
-            {rollups.severityLine ? (
-              <>
-                <span aria-hidden="true"> · </span>
-                <span>{rollups.severityLine}</span>
-              </>
-            ) : null}
-            <span className="text-desk-subtle">{expanded ? ' — hide detail' : ' — show detail'}</span>
-          </p>
-        </div>
-        <ChevronDown
-          size={18}
-          className={clsx('shrink-0 text-desk-muted transition-transform duration-200', expanded && 'rotate-180')}
-          aria-hidden="true"
-        />
-      </button>
-
-      {expanded ? (
-        <div
-          id="analysis-findings-panel"
-          role="region"
-          aria-labelledby="analysis-findings-toggle"
-          className="max-h-[min(28rem,calc(100vh-12rem))] overflow-y-auto overscroll-contain border-t border-desk-border px-2 pb-3 pt-3 sm:px-4 sm:pb-4"
-        >
-          <p className="mb-3 px-2 text-[11px] text-desk-muted sm:px-0">
-            Themes below open individually. Long themes scroll inside their card — this panel scrolls for many themes.
-          </p>
-          <div className="flex flex-col gap-4">
-            {ANALYSIS_BUCKETS.map((bucket) =>
-              byBucket[bucket.id]?.length ? (
-                <CategoryAccordion
-                  key={bucket.id}
-                  bucket={bucket}
-                  issues={byBucket[bucket.id]}
-                  initiallyOpen={bucket.id === firstNonEmptyBucketId}
-                />
-              ) : null
-            )}
-          </div>
-        </div>
-      ) : null}
-    </section>
+    <CollapsibleSection
+      idPrefix="analysis-findings"
+      icon={ClipboardList}
+      title="Analysis findings"
+      badge={sortedIssues.length}
+      expandable={false}
+      summary={
+        <>
+          {rollups.themeGroups} theme group{rollups.themeGroups !== 1 ? 's' : ''}
+          {rollups.severityLine ? (
+            <>
+              <span aria-hidden="true"> · </span>
+              <span>{rollups.severityLine}</span>
+            </>
+          ) : null}
+        </>
+      }
+      panelClassName="max-h-[min(28rem,calc(100vh-12rem))] overflow-y-auto overscroll-contain px-2 pb-3 pt-3 sm:px-4 sm:pb-4"
+    >
+      <p className="mb-3 px-2 text-[11px] text-desk-muted sm:px-0">
+        Themes below open individually. Long themes scroll inside their card — this panel scrolls for many themes.
+      </p>
+      <div className="flex flex-col gap-4">
+        {ANALYSIS_BUCKETS.map((bucket) =>
+          byBucket[bucket.id]?.length ? (
+            <CategoryAccordion
+              key={bucket.id}
+              bucket={bucket}
+              issues={byBucket[bucket.id]}
+              initiallyOpen={bucket.id === firstNonEmptyBucketId}
+            />
+          ) : null
+        )}
+      </div>
+    </CollapsibleSection>
   );
 }
 
 function FilesChanged({ fileStats }) {
-  const [expanded, setExpanded] = useState(false);
-
   const rollups = useMemo(() => {
     if (!fileStats?.length) return null;
     const totalAdd = fileStats.reduce((s, f) => s + (Number(f.additions) || 0), 0);
@@ -370,85 +340,58 @@ function FilesChanged({ fileStats }) {
   if (!fileStats?.length || !rollups) return null;
 
   return (
-    <section className="card mb-6 overflow-hidden p-0" aria-label="Files changed in this commit">
-      <button
-        type="button"
-        id="files-changed-toggle"
-        aria-expanded={expanded}
-        aria-controls="files-changed-panel"
-        onClick={() => setExpanded((v) => !v)}
-        className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-desk-elevated/45 sm:px-5"
-      >
-        <FileCode size={18} className="shrink-0 text-desk-muted" aria-hidden="true" />
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-desk-muted">
-              Files in this commit
+    <CollapsibleSection
+      idPrefix="files-changed"
+      icon={FileCode}
+      title="Files in this commit"
+      badge={fileStats.length}
+      defaultExpanded={false}
+      summary={
+        <>
+          <span className="tabular-nums text-emerald-700 dark:text-emerald-400">+{rollups.totalAdd}</span>
+          <span aria-hidden="true">·</span>
+          <span className="tabular-nums text-red-600 dark:text-[#ff7b72]">−{rollups.totalDel}</span>
+          {rollups.withFindings > 0 ? (
+            <>
+              <span aria-hidden="true">·</span>
+              <span className="tabular-nums text-amber-900 dark:text-amber-300">
+                {rollups.withFindings} with findings
+              </span>
+            </>
+          ) : null}
+        </>
+      }
+      panelClassName="max-h-72 overflow-y-auto overscroll-contain px-2 pb-3 pt-2 sm:max-h-80 sm:px-4"
+    >
+      <p className="mb-2 px-2 text-[11px] text-desk-muted sm:px-0">
+        Per-file lines added/removed in the GitHub diff — scroll if the commit is large.
+      </p>
+      <div className="grid grid-cols-1 gap-px rounded-lg border border-desk-border bg-desk-border sm:grid-cols-2">
+        {fileStats.map((f, idx) => (
+          <div
+            key={f.file_path || `changed-${idx}`}
+            className="flex min-w-0 flex-col gap-1 bg-desk-panel p-3 sm:flex-row sm:items-center sm:gap-3"
+          >
+            <FileCode size={13} className="shrink-0 text-desk-subtle sm:mt-0" aria-hidden="true" />
+            <span
+              className="min-w-0 flex-1 truncate font-mono text-[12px] text-gray-800 dark:text-gray-200"
+              title={f.file_path}
+            >
+              {f.file_path}
             </span>
-            <span className="rounded-full border border-desk-border bg-desk-canvas px-2 py-0.5 font-mono text-[11px] font-medium tabular-nums text-gray-800 dark:text-gray-200">
-              {fileStats.length}
-            </span>
-          </div>
-          <p className="mt-1 flex flex-wrap items-center gap-x-1.5 text-[12px] text-desk-muted">
-            <span className="tabular-nums text-emerald-700 dark:text-emerald-400">+{rollups.totalAdd}</span>
-            <span aria-hidden="true">·</span>
-            <span className="tabular-nums text-red-600 dark:text-[#ff7b72]">−{rollups.totalDel}</span>
-            {rollups.withFindings > 0 && (
-              <>
-                <span aria-hidden="true">·</span>
-                <span className="tabular-nums text-amber-900 dark:text-amber-300">
-                  {rollups.withFindings} with findings
+            <div className="flex shrink-0 flex-wrap items-center gap-x-2 font-mono text-[11px]">
+              <span className="tabular-nums text-emerald-700 dark:text-emerald-400">+{f.additions}</span>
+              <span className="tabular-nums text-red-600 dark:text-[#ff7b72]">−{f.deletions}</span>
+              {f.issues_count > 0 ? (
+                <span className="font-medium text-amber-900 tabular-nums dark:text-amber-300">
+                  {f.issues_count} finding{f.issues_count === 1 ? '' : 's'}
                 </span>
-              </>
-            )}
-            <span className="text-desk-subtle">{expanded ? ' — hide list' : ' — show list'}</span>
-          </p>
-        </div>
-        <ChevronDown
-          size={18}
-          className={clsx('shrink-0 text-desk-muted transition-transform duration-200', expanded && 'rotate-180')}
-          aria-hidden="true"
-        />
-      </button>
-
-      {expanded ? (
-        <div
-          id="files-changed-panel"
-          role="region"
-          aria-labelledby="files-changed-toggle"
-          className="max-h-72 overflow-y-auto overscroll-contain border-t border-desk-border px-2 pb-3 pt-2 sm:max-h-80 sm:px-4"
-        >
-          <p className="mb-2 px-2 text-[11px] text-desk-muted sm:px-0">
-            Per-file lines added/removed in the GitHub diff — scroll if the commit is large.
-          </p>
-          <div className="grid grid-cols-1 gap-px rounded-lg border border-desk-border bg-desk-border sm:grid-cols-2">
-            {fileStats.map((f, idx) => (
-              <div
-                key={f.file_path || `changed-${idx}`}
-                className="flex min-w-0 flex-col gap-1 bg-desk-panel p-3 sm:flex-row sm:items-center sm:gap-3"
-              >
-                <FileCode size={13} className="shrink-0 text-desk-subtle sm:mt-0" aria-hidden="true" />
-                <span
-                  className="min-w-0 flex-1 truncate font-mono text-[12px] text-gray-800 dark:text-gray-200"
-                  title={f.file_path}
-                >
-                  {f.file_path}
-                </span>
-                <div className="flex shrink-0 flex-wrap items-center gap-x-2 font-mono text-[11px]">
-                  <span className="tabular-nums text-emerald-700 dark:text-emerald-400">+{f.additions}</span>
-                  <span className="tabular-nums text-red-600 dark:text-[#ff7b72]">−{f.deletions}</span>
-                  {f.issues_count > 0 ? (
-                    <span className="font-medium text-amber-900 tabular-nums dark:text-amber-300">
-                      {f.issues_count} finding{f.issues_count === 1 ? '' : 's'}
-                    </span>
-                  ) : null}
-                </div>
-              </div>
-            ))}
+              ) : null}
+            </div>
           </div>
-        </div>
-      ) : null}
-    </section>
+        ))}
+      </div>
+    </CollapsibleSection>
   );
 }
 
@@ -661,9 +604,12 @@ export default function ReviewDetailPage() {
           </div>
         )}
 
-        <div className="mt-6 flex flex-wrap gap-2" aria-label="Issue breakdown">
+        <div
+          className="mt-6 flex flex-nowrap gap-2 overflow-x-auto overscroll-contain pb-1 sm:flex-wrap md:overflow-visible md:pb-0"
+          aria-label="Issue breakdown"
+        >
           {review.status === 'completed' && issues.length === 0 && (
-            <span className="flex items-center gap-2 text-[12px] text-green-700 dark:text-green-400/95">
+            <span className="flex shrink-0 items-center gap-2 text-[12px] text-green-700 dark:text-green-400/95">
               <CheckCircle2 size={14} aria-hidden="true" />
               No flagged issues detected
             </span>
@@ -673,7 +619,7 @@ export default function ReviewDetailPage() {
               <a
                 key={sev}
                 href={`#analysis-${bucketCategoryForSeverityJump(sev, byBucket)}`}
-                className="inline-flex items-center gap-2 rounded-full border border-desk-border bg-desk-canvas px-2.5 py-1 text-[11px] text-gray-700 hover:border-brand-600/35 hover:bg-brand-600/10 dark:text-gray-300"
+                className="inline-flex shrink-0 items-center gap-2 rounded-full border border-desk-border bg-desk-canvas px-2.5 py-1 text-[11px] text-gray-700 hover:border-brand-600/35 hover:bg-brand-600/10 dark:text-gray-300"
               >
                 <SeverityBadge severity={sev} plainLanguage />
                 <span className="tabular-nums text-desk-muted">{issueCounts[sev]}</span>

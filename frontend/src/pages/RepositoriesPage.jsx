@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import clsx from 'clsx';
 import { reposApi, reviewsApi } from '../api/client';
+import { useAuth } from '../context/AuthContext';
 import { Spinner, EmptyState, PageHeader } from '../components/common/UI';
 import { RepoCardSkeleton } from '../components/common/Skeletons';
 import ConfirmDialog from '../components/common/ConfirmDialog';
@@ -71,6 +72,7 @@ function repoHealthStatus(repo) {
 }
 
 export default function RepositoriesPage() {
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const toast = useToast();
 
@@ -304,8 +306,17 @@ export default function RepositoriesPage() {
       <PageHeader
         title="Repositories"
         description="Pushes queue automatically whenever the webhook is healthy. Trigger “Review latest” for immediate feedback on your default branch without waiting for CI."
+        hint={
+          user?.username
+            ? `Repos and webhooks belong to GitHub OAuth for @${user.username}. Org repos need admin rights to install hooks.`
+            : 'Webhooks install only on repos where your GitHub user can administer hooks.'
+        }
         action={
-          <button type="button" className="btn-primary" onClick={() => setShowPicker((v) => !v)}>
+          <button
+            type="button"
+            className="btn-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/55 focus-visible:ring-offset-2 focus-visible:ring-offset-desk-canvas dark:focus-visible:ring-offset-desk-panel"
+            onClick={() => setShowPicker((v) => !v)}
+          >
             <Plus size={16} aria-hidden="true" />
             {showPicker ? 'Close picker' : 'Connect repo'}
           </button>
@@ -403,8 +414,8 @@ export default function RepositoriesPage() {
       )}
 
       {reposError ? (
-        <div className="card p-10 text-center">
-          <p className="mb-3 text-sm text-red-300">Could not load connected repositories.</p>
+        <div className="card overflow-hidden p-10 text-center">
+          <p className="mb-3 text-sm text-red-800 dark:text-red-300">Could not load connected repositories.</p>
           <button type="button" className="btn-secondary px-4 py-2 text-xs" onClick={() => refetchRepos()}>
             Retry
           </button>
@@ -416,18 +427,21 @@ export default function RepositoriesPage() {
           ))}
         </div>
       ) : connected.length === 0 ? (
-        <EmptyState
-          icon={GitBranch}
-          title="No repositories connected"
-          description="Connect a GitHub repository to start collecting automated AI reviews on pushes."
-          action={
-            <button type="button" className="btn-primary" onClick={() => setShowPicker(true)}>
-              <Plus size={16} aria-hidden="true" />
-              Connect your first repo
-            </button>
-          }
-        />
+        <div className="card overflow-hidden">
+          <EmptyState
+            icon={GitBranch}
+            title="No repositories connected"
+            description="Connect a GitHub repository to start collecting automated AI reviews on pushes."
+            action={
+              <button type="button" className="btn-primary" onClick={() => setShowPicker(true)}>
+                <Plus size={16} aria-hidden="true" />
+                Connect your first repo
+              </button>
+            }
+          />
+        </div>
       ) : (
+        <div className="max-h-none overflow-visible lg:max-h-[min(40rem,calc(100vh-12rem))] lg:overflow-y-auto lg:overscroll-contain lg:pr-1">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3" role="list">
           {connected.map((repo) => {
             const completedReviews = (repo.code_reviews ?? [])
@@ -458,7 +472,10 @@ export default function RepositoriesPage() {
                       </div>
                     )}
                     <div className="min-w-0">
-                      <p className="break-words font-mono text-[13px] font-semibold leading-snug text-gray-900 dark:text-gray-50">
+                      <p
+                        className="truncate font-mono text-[13px] font-semibold leading-snug text-gray-900 dark:text-gray-50"
+                        title={repo.full_name}
+                      >
                         {repo.full_name}
                       </p>
                       <div className="mt-2 flex flex-wrap gap-2">
@@ -546,6 +563,7 @@ export default function RepositoriesPage() {
               </div>
             );
           })}
+        </div>
         </div>
       )}
 

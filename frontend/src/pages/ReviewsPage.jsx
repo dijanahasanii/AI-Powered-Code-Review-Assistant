@@ -5,6 +5,7 @@ import { safeDistanceToNow } from '../utils/safeDates';
 import { ClipboardList, GitCommit, ChevronLeft, ChevronRight, GitBranch } from 'lucide-react';
 import clsx from 'clsx';
 import { reviewsApi } from '../api/client';
+import { useAuth } from '../context/AuthContext';
 import { ScoreRing, StatusBadge, EmptyState, PageHeader } from '../components/common/UI';
 import { ReviewCardSkeleton } from '../components/common/Skeletons';
 
@@ -12,6 +13,7 @@ const STATUS_FILTERS = ['all', 'completed', 'processing', 'pending', 'failed'];
 const LIMIT = 15;
 
 export default function ReviewsPage() {
+  const { user } = useAuth();
   const [status, setStatus] = useState('all');
   const [page, setPage] = useState(1);
 
@@ -41,6 +43,11 @@ export default function ReviewsPage() {
       <PageHeader
         title="Reviews"
         description={total > 0 ? `${total} review${total !== 1 ? 's' : ''} total` : 'Browse every queued and completed AI review'}
+        hint={
+          user?.username
+            ? `Runs for workspaces linked while signed in as @${user.username}. Use filters below to narrow by status.`
+            : 'Use filters to narrow queued and completed runs by status.'
+        }
       />
 
       <div className="mb-6 inline-flex flex-wrap gap-1 rounded-md border border-desk-border bg-desk-panel p-1" role="group" aria-label="Filter by status">
@@ -52,6 +59,7 @@ export default function ReviewsPage() {
             aria-pressed={status === s}
             className={clsx(
               'rounded px-3 py-1.5 text-xs font-medium capitalize transition-colors',
+              'focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/55 focus-visible:ring-offset-2 focus-visible:ring-offset-desk-panel dark:focus-visible:ring-offset-desk-canvas',
               status === s
                 ? 'bg-desk-elevated text-gray-900 shadow-sm ring-1 ring-desk-border dark:text-gray-50'
                 : 'text-desk-muted hover:bg-desk-canvas hover:text-gray-800 dark:hover:text-gray-200'
@@ -63,7 +71,7 @@ export default function ReviewsPage() {
       </div>
 
       {isError ? (
-        <div className="card p-10 text-center">
+        <div className="card overflow-hidden p-10 text-center">
           <p className="mb-3 text-sm text-red-800 dark:text-red-300">
             Could not load reviews. Check your connection and try again.
           </p>
@@ -78,18 +86,21 @@ export default function ReviewsPage() {
           ))}
         </div>
       ) : reviews.length === 0 ? (
-        <EmptyState
-          icon={ClipboardList}
-          title="No reviews found"
-          description={emptyDescription}
-        />
+        <div className="card overflow-hidden">
+          <EmptyState icon={ClipboardList} title="No reviews found" description={emptyDescription} />
+        </div>
       ) : (
         <>
           <div
             className={clsx(
-              'grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3',
+              'max-h-none overflow-visible lg:max-h-[min(32rem,calc(100vh-14rem))] lg:overflow-y-auto lg:overscroll-contain lg:pr-1',
               isPlaceholderData ? 'opacity-70' : '',
               'transition-opacity'
+            )}
+          >
+          <div
+            className={clsx(
+              'grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3'
             )}
           >
             {reviews.map((review) => (
@@ -109,7 +120,9 @@ export default function ReviewsPage() {
                       <StatusBadge status={review.status} compact />
                     </div>
                     <div className="mt-2 flex flex-wrap items-center gap-2 font-mono text-[11px] text-desk-muted">
-                      <span className="truncate">{review.repositories?.full_name}</span>
+                      <span className="min-w-0 truncate" title={review.repositories?.full_name || undefined}>
+                        {review.repositories?.full_name}
+                      </span>
                       {review.branch && (
                         <span className="inline-flex items-center gap-1 rounded border border-desk-border bg-desk-canvas px-1.5 py-0 text-desk-muted">
                           <GitBranch size={10} aria-hidden="true" />
@@ -132,6 +145,7 @@ export default function ReviewsPage() {
               </Link>
             ))}
           </div>
+          </div>
 
           {totalPages > 1 && (
             <div className="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -144,7 +158,7 @@ export default function ReviewsPage() {
                   disabled={page === 1}
                   onClick={() => setPage((p) => p - 1)}
                   aria-label="Previous page"
-                  className="btn-secondary p-2 disabled:opacity-40"
+                  className="btn-secondary p-2 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/55 focus-visible:ring-offset-2 focus-visible:ring-offset-desk-canvas dark:focus-visible:ring-offset-desk-panel"
                 >
                   <ChevronLeft size={14} aria-hidden="true" />
                 </button>
@@ -153,7 +167,7 @@ export default function ReviewsPage() {
                   disabled={page >= totalPages}
                   onClick={() => setPage((p) => p + 1)}
                   aria-label="Next page"
-                  className="btn-secondary p-2 disabled:opacity-40"
+                  className="btn-secondary p-2 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/55 focus-visible:ring-offset-2 focus-visible:ring-offset-desk-canvas dark:focus-visible:ring-offset-desk-panel"
                 >
                   <ChevronRight size={14} aria-hidden="true" />
                 </button>

@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { SocketProvider } from './context/SocketContext';
 import ErrorBoundary from './components/common/ErrorBoundary';
@@ -29,11 +29,19 @@ function FullPageSpinner() {
   );
 }
 
-function ProtectedRoute({ children }) {
+/**
+ * Auth gate for all workspace routes — must wrap nested routes via <Outlet /> (not by passing Layout as JSX children).
+ * Otherwise unauthenticated URLs can bypass the guard depending on RR version / tree shape.
+ */
+function RequireAuthOutlet() {
   const { user, loading } = useAuth();
+  const location = useLocation();
+
   if (loading) return <FullPageSpinner />;
-  if (!user) return <Navigate to="/" replace />;
-  return children;
+  if (!user) {
+    return <Navigate to="/" replace state={{ from: location.pathname + location.search }} />;
+  }
+  return <Outlet />;
 }
 
 /** Keeps suspense fallback aligned with routed content area height inside `Layout`. */
@@ -56,63 +64,59 @@ export default function App() {
               <Route path="/login" element={<GitHubLanding />} />
               <Route path="/auth/callback" element={<CallbackPage />} />
 
-              <Route
-              element={
-                <ProtectedRoute>
-                  <Layout />
-                </ProtectedRoute>
-              }
-            >
-              <Route
-                path="dashboard"
-                element={
-                  <ErrorBoundary>
-                    <Suspense fallback={<RouteSkeleton />}>
-                      <DashboardPage />
-                    </Suspense>
-                  </ErrorBoundary>
-                }
-              />
-              <Route
-                path="repositories"
-                element={
-                  <ErrorBoundary>
-                    <Suspense fallback={<RouteSkeleton />}>
-                      <RepositoriesPage />
-                    </Suspense>
-                  </ErrorBoundary>
-                }
-              />
-              <Route
-                path="reviews"
-                element={
-                  <ErrorBoundary>
-                    <Suspense fallback={<RouteSkeleton />}>
-                      <ReviewsPage />
-                    </Suspense>
-                  </ErrorBoundary>
-                }
-              />
-              <Route
-                path="reviews/:id"
-                element={
-                  <ErrorBoundary>
-                    <Suspense fallback={<RouteSkeleton />}>
-                      <ReviewDetailPage />
-                    </Suspense>
-                  </ErrorBoundary>
-                }
-              />
-              <Route
-                path="settings"
-                element={
-                  <ErrorBoundary>
-                    <Suspense fallback={<RouteSkeleton />}>
-                      <SettingsPage />
-                    </Suspense>
-                  </ErrorBoundary>
-                }
-              />
+              <Route element={<RequireAuthOutlet />}>
+                <Route element={<Layout />}>
+                  <Route
+                    path="dashboard"
+                    element={
+                      <ErrorBoundary>
+                        <Suspense fallback={<RouteSkeleton />}>
+                          <DashboardPage />
+                        </Suspense>
+                      </ErrorBoundary>
+                    }
+                  />
+                  <Route
+                    path="repositories"
+                    element={
+                      <ErrorBoundary>
+                        <Suspense fallback={<RouteSkeleton />}>
+                          <RepositoriesPage />
+                        </Suspense>
+                      </ErrorBoundary>
+                    }
+                  />
+                  <Route
+                    path="reviews"
+                    element={
+                      <ErrorBoundary>
+                        <Suspense fallback={<RouteSkeleton />}>
+                          <ReviewsPage />
+                        </Suspense>
+                      </ErrorBoundary>
+                    }
+                  />
+                  <Route
+                    path="reviews/:id"
+                    element={
+                      <ErrorBoundary>
+                        <Suspense fallback={<RouteSkeleton />}>
+                          <ReviewDetailPage />
+                        </Suspense>
+                      </ErrorBoundary>
+                    }
+                  />
+                  <Route
+                    path="settings"
+                    element={
+                      <ErrorBoundary>
+                        <Suspense fallback={<RouteSkeleton />}>
+                          <SettingsPage />
+                        </Suspense>
+                      </ErrorBoundary>
+                    }
+                  />
+                </Route>
               </Route>
 
               <Route path="*" element={<Navigate to="/" replace />} />

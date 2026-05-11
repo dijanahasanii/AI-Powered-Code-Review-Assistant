@@ -11,15 +11,19 @@ import {
   Sun,
   Moon,
   Monitor,
+  Wifi,
+  WifiOff,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuth } from '../context/AuthContext';
+import { useSocket } from '../context/SocketContext';
 import { useUiPreferences } from '../context/UiPreferencesContext';
 import { Avatar, PageHeader } from '../components/common/UI';
 
 export default function SettingsPage() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const { connected } = useSocket();
   const { density, setDensity, theme, setTheme, resolvedTheme } = useUiPreferences();
 
   const scrollToSection = (id) => {
@@ -35,7 +39,7 @@ export default function SettingsPage() {
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-8 px-4 py-8 sm:px-6 lg:flex-row lg:gap-12 lg:px-8 lg:py-10">
-      <aside className="lg:w-52 lg:shrink-0 lg:pt-1">
+      <aside className="lg:sticky lg:top-24 lg:z-10 lg:max-h-[calc(100vh-6rem)] lg:w-52 lg:shrink-0 lg:self-start lg:overflow-y-auto lg:pt-1">
         <p className="mb-3 hidden px-1 text-[11px] font-semibold uppercase tracking-wider text-desk-muted lg:block">
           Settings
         </p>
@@ -52,7 +56,7 @@ export default function SettingsPage() {
               key={id}
               type="button"
               onClick={() => scrollToSection(id)}
-              className="flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] font-medium whitespace-nowrap text-desk-muted transition-colors hover:bg-desk-panel hover:text-gray-900 dark:hover:text-gray-100"
+              className="flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] font-medium whitespace-nowrap text-desk-muted transition-colors hover:bg-desk-panel hover:text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 focus-visible:ring-offset-2 focus-visible:ring-offset-desk-canvas dark:hover:text-gray-100 dark:focus-visible:ring-offset-desk-panel"
             >
               <Icon size={15} aria-hidden="true" className="opacity-85" />
               {label}
@@ -65,6 +69,7 @@ export default function SettingsPage() {
         <PageHeader
           title="Workspace settings"
           description="Signed in with GitHub. Changes here affect this browser session only—they don’t call the API."
+          hint="On large screens the left nav stays pinned while you scroll. These prefs are browser-only — the API does not store them yet."
         />
 
         <section id="account" className="scroll-mt-28">
@@ -164,6 +169,36 @@ export default function SettingsPage() {
                   <Monitor size={15} aria-hidden="true" />
                   System
                 </button>
+              </div>
+            </div>
+
+            <div className="border-t border-desk-border pt-5">
+              <p className="font-medium text-gray-900 dark:text-gray-50">Live updates</p>
+              <p className="mt-1 text-[13px] text-desk-muted">
+                When connected, review and queue changes can reach this tab over the socket; otherwise the app polls on
+                an interval. This is session-only and mirrors the banner you see if the connection drops.
+              </p>
+              <div
+                className={clsx(
+                  'mt-3 inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-[13px] font-medium',
+                  connected
+                    ? 'border-emerald-500/35 bg-emerald-500/[0.1] text-emerald-900 dark:text-emerald-300/95'
+                    : 'border-desk-border bg-desk-canvas text-desk-muted'
+                )}
+                role="status"
+                aria-live="polite"
+              >
+                {connected ? (
+                  <>
+                    <Wifi size={15} className="shrink-0 text-emerald-700 dark:text-emerald-400" aria-hidden="true" />
+                    Connected — realtime push enabled
+                  </>
+                ) : (
+                  <>
+                    <WifiOff size={15} className="shrink-0 opacity-80" aria-hidden="true" />
+                    {user ? 'Not connected — periodic refresh only' : 'Sign in to enable live updates'}
+                  </>
+                )}
               </div>
             </div>
 
