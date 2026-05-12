@@ -8,7 +8,7 @@ import {
   AlertOctagon,
 } from 'lucide-react';
 import { Spinner } from '../../../components/common/UI';
-import { getCompletedReviewsNewestFirst, repoHealthStatus } from '../utils/repoReviewStats';
+import { getCompletedReviewsNewestFirst, repoHealthStatus } from '../lib/repoReviewStats';
 
 export function ConnectedRepoCard({
   repo,

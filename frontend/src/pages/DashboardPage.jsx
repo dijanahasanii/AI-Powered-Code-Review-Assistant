@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { safeDistanceToNow } from '../utils/safeDates';
+import { safeDistanceToNow } from '../lib/safeDates';
 import {
   BarChart3,
   AlertTriangle,

@@ -1,6 +1,6 @@
 'use strict';
 
-const { clipSnippet } = require('../services/diffParseUtils');
+const { clipSnippet } = require('../lib/diffParseUtils');
 
 const SECRET_SHAPE =
   /\bsk_live_\S{10,}|sk-ant-api\d*|AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{20,}|xox[bap]-[A-Za-z0-9-]+|-----BEGIN\s+(RSA\s+)?PRIVATE\s+KEY-----/i;

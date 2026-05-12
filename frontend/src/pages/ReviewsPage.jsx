@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { safeDistanceToNow } from '../utils/safeDates';
+import { safeDistanceToNow } from '../lib/safeDates';
 import { ClipboardList, GitCommit, ChevronLeft, ChevronRight, GitBranch } from 'lucide-react';
 import clsx from 'clsx';
 import { reviewsApi } from '../api/client';

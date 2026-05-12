@@ -1,7 +1,7 @@
 'use strict';
 
 const { logger } = require('../utils/logger');
-const { iterateAddedLines, clipSnippet } = require('./diffParseUtils');
+const { iterateAddedLines, clipSnippet } = require('../lib/diffParseUtils');
 
 /**
  * Zero-cost local code review — pattern scan on unified diff additions only.

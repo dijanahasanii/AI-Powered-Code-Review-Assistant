@@ -5,7 +5,7 @@
  * obvious smells should still be surfaced with line + snippet context.
  */
 
-const { iterateAddedLines, clipSnippet } = require('./diffParseUtils');
+const { iterateAddedLines, clipSnippet } = require('../lib/diffParseUtils');
 
 const normalizePath = (p) => String(p || '').replace(/^\s*/, '').trim();
 

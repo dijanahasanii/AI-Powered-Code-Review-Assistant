@@ -1,6 +1,6 @@
 /**
  * Synthetic unified-diff fixtures for thesis evaluation only.
- * Format matches backend/src/services/diffParseUtils.js (diff --git … @@ … + lines).
+ * Format matches backend/src/lib/diffParseUtils.js (diff --git … @@ … + lines).
  */
 
 function diffGit(file, hunkBody) {

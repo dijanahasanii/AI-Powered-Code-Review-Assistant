@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
-import { safeDistanceToNow, safeFormatDateTime } from '../utils/safeDates';
+import { safeDistanceToNow, safeFormatDateTime } from '../lib/safeDates';
 import {
   ChevronLeft,
   GitCommit,
