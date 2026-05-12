@@ -1,9 +1,10 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { GitBranch, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { reposApi, reviewsApi } from '../api/client';
+import { describeApiFailure } from '../lib/apiErrors';
 import { useAuth } from '../context/AuthContext';
-import { EmptyState, PageHeader } from '../components/common/UI';
+import { PageHeader } from '../components/common/UI';
 import { RepoCardSkeleton } from '../components/common/Skeletons';
 import ConfirmDialog from '../components/common/ConfirmDialog';
 import { useToast } from '../components/common/Toast';
@@ -11,6 +12,7 @@ import { ReposWebhookBanner } from '../features/repos/components/ReposWebhookBan
 import { ReviewHintBanner } from '../features/repos/components/ReviewHintBanner';
 import { GitHubRepoPicker } from '../features/repos/components/GitHubRepoPicker';
 import { ConnectedReposGrid } from '../features/repos/components/ConnectedReposGrid';
+import { NoConnectedReposHero } from '../features/repos/components/NoConnectedReposHero';
 import { queryKeys } from '../lib/queryKeys';
 
 export default function RepositoriesPage() {
@@ -32,6 +34,7 @@ export default function RepositoriesPage() {
   } = useQuery({
     queryKey: queryKeys.repos,
     queryFn: () => reposApi.list().then((r) => r.data.data ?? []),
+    staleTime: 45_000,
   });
 
   const {
@@ -63,7 +66,10 @@ export default function RepositoriesPage() {
     onMutate: (repo) => setConnectingId(repo.githubRepoId),
     onSuccess: (data, repo) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.repos });
-      toast.success('Repository connected', `${repo.fullName} is now active.`);
+      toast.success(
+        'Repository connected',
+        `${repo.fullName} is linked. Webhooks fire on push when your callback URL and secret are valid.`
+      );
       setShowPicker(false);
       setReviewHint(null);
       if (!data?.webhook_active) {
@@ -76,33 +82,36 @@ export default function RepositoriesPage() {
     },
     onError: (err, repoVariables) => {
       const repoLabel = repoVariables?.fullName ?? 'repository';
-      const msg = err.response?.data?.error || 'Failed to connect repository.';
-      toast.error('Connection failed', `${repoLabel}: ${msg}`);
+      const { title, detail } = describeApiFailure(err, { resourceLabel: `connecting ${repoLabel}` });
+      toast.error(title, detail);
     },
     onSettled: () => setConnectingId(null),
   });
 
   const disconnectMutation = useMutation({
     mutationFn: (id) => reposApi.disconnect(id),
-    onSuccess: (_, id) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.repos });
-      // Backend removes reviews for this repo — refresh lists so sidebar / Reviews stay in sync without full reload.
-      queryClient.invalidateQueries({ queryKey: queryKeys.reviewsAll });
-      queryClient.invalidateQueries({ queryKey: queryKeys.stats });
-      queryClient.invalidateQueries({ queryKey: ['review'] });
+    onSuccess: async (_, id) => {
       const name = connected.find((r) => r.id === id)?.full_name ?? 'Repository';
+
+      await queryClient.cancelQueries({ queryKey: queryKeys.repos });
+      queryClient.setQueryData(queryKeys.repos, (old) => {
+        if (!Array.isArray(old)) return old;
+        return old.filter((r) => r.id !== id);
+      });
+
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.reviewsAll, refetchType: 'none' }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.stats, refetchType: 'none' }),
+        queryClient.invalidateQueries({ queryKey: ['review'], refetchType: 'none' }),
+      ]);
+
       toast.success('Disconnected', `${name} has been removed from review automation.`);
       setConfirmRepo(null);
       setReviewHint(null);
     },
     onError: (err) => {
-      const data = err.response?.data;
-      const msg =
-        (data && typeof data.error === 'string' && data.error) ||
-        (Array.isArray(data?.errors) && data.errors[0]?.msg) ||
-        err.message ||
-        'Failed to disconnect repository.';
-      toast.error('Disconnect failed', msg);
+      const { title, detail } = describeApiFailure(err, { resourceLabel: 'disconnecting the repository' });
+      toast.error(title, detail);
     },
   });
 
@@ -110,14 +119,12 @@ export default function RepositoriesPage() {
     mutationFn: (repositoryId) => reposApi.syncWebhook(repositoryId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.repos });
-      toast.success('Webhook installed', 'GitHub push events can reach your API for this repo.');
+      toast.success('Webhook verified', 'GitHub can deliver push events to your API for this repo.');
       setReviewHint(null);
     },
     onError: (err) => {
-      toast.error(
-        'Webhook install failed',
-        err.response?.data?.error || err.message || 'Check BACKEND_URL, ngrok, and GITHUB_WEBHOOK_SECRET.'
-      );
+      const { title, detail } = describeApiFailure(err, { resourceLabel: 'webhook installation' });
+      toast.error(title, detail);
     },
   });
 
@@ -163,7 +170,7 @@ export default function RepositoriesPage() {
       queryClient.invalidateQueries({ queryKey: queryKeys.reviewsAll });
       queryClient.invalidateQueries({ queryKey: queryKeys.stats });
 
-      toast.success('Review queued', 'Open Reviews to monitor progress.');
+      toast.success('Review started', 'Queued on the default branch — open Reviews to watch it run.');
       const meta = res?.data?.meta || {};
       if (meta.duplicatePending) {
         setReviewHint({
@@ -184,9 +191,9 @@ export default function RepositoriesPage() {
       }
     },
     onError: (err) => {
-      const msg = err.response?.data?.error || err.message || 'Request failed';
-      toast.error('Could not queue review', msg);
-      setReviewHint({ tone: 'error', text: msg });
+      const { title, detail } = describeApiFailure(err, { resourceLabel: 'the review queue' });
+      toast.error(title, detail);
+      setReviewHint({ tone: 'error', text: detail });
     },
   });
 
@@ -219,7 +226,9 @@ export default function RepositoriesPage() {
         action={
           <button
             type="button"
-            className="btn-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/55 focus-visible:ring-offset-2 focus-visible:ring-offset-desk-canvas dark:focus-visible:ring-offset-desk-panel"
+            disabled={disconnectMutation.isPending}
+            aria-busy={connectMutation.isPending}
+            className="btn-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/55 focus-visible:ring-offset-2 focus-visible:ring-offset-desk-canvas disabled:opacity-50 dark:focus-visible:ring-offset-desk-panel"
             onClick={() => setShowPicker((v) => !v)}
           >
             <Plus size={16} aria-hidden="true" />
@@ -257,19 +266,7 @@ export default function RepositoriesPage() {
           ))}
         </div>
       ) : connected.length === 0 ? (
-        <div className="card overflow-hidden">
-          <EmptyState
-            icon={GitBranch}
-            title="No repositories connected"
-            description="Connect a GitHub repository to start collecting automated AI reviews on pushes."
-            action={
-              <button type="button" className="btn-primary" onClick={() => setShowPicker(true)}>
-                <Plus size={16} aria-hidden="true" />
-                Connect your first repo
-              </button>
-            }
-          />
-        </div>
+        <NoConnectedReposHero onConnect={() => setShowPicker(true)} />
       ) : (
         <ConnectedReposGrid
           repos={connected}

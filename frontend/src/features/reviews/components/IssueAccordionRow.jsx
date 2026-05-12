@@ -16,7 +16,12 @@ export function IssueAccordionRow({ issue, defaultOpen }) {
   const [open, setOpen] = useState(Boolean(defaultOpen));
 
   return (
-    <div className={clsx('overflow-hidden rounded-md border bg-desk-canvas', meta.wrap)}>
+    <div
+      className={clsx(
+        'overflow-hidden rounded-lg border bg-desk-canvas shadow-sm ring-1 ring-black/[0.03] dark:ring-white/[0.04]',
+        meta.wrap
+      )}
+    >
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -33,7 +38,7 @@ export function IssueAccordionRow({ issue, defaultOpen }) {
                 <span className="ml-1 font-medium text-gray-800 dark:text-gray-200">{typeLabel}</span>
               </span>
             )}
-            <span className="w-full basis-full text-[13px] font-semibold leading-snug text-gray-900 dark:text-gray-100">
+            <span className="w-full basis-full break-words text-[13px] font-semibold leading-snug text-gray-900 dark:text-gray-100">
               {issue.title}
             </span>
           </div>
@@ -83,7 +88,7 @@ export function IssueAccordionRow({ issue, defaultOpen }) {
                 {issue.matched_rule}
               </p>
             ) : null}
-            <p className="text-sm leading-relaxed text-gray-800 dark:text-gray-300">{issue.description}</p>
+            <p className="text-sm leading-relaxed text-gray-800 dark:text-gray-300 break-words">{issue.description}</p>
           </div>
 
           {issue.suggestion && (

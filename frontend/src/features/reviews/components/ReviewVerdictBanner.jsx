@@ -2,10 +2,10 @@ import { useMemo } from 'react';
 import { SEVERITY_ORDER } from '../analysisConstants';
 
 const PHRASE = {
-  critical: (n) => `${n} serious`,
-  warning: (n) => `${n} need attention`,
-  info: (n) => `${n} FYI`,
-  suggestion: (n) => `${n} suggestion${n === 1 ? '' : 's'}`,
+  critical: (n) => `${n} high-severity`,
+  warning: (n) => `${n} medium-severity`,
+  info: (n) => `${n} low-severity`,
+  suggestion: (n) => `${n} tip${n === 1 ? '' : 's'}`,
 };
 
 const WRAP = {

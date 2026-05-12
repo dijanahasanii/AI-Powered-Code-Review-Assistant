@@ -99,9 +99,8 @@ describe('ReviewsPage (user behavior)', () => {
 
     renderReviews();
 
-    expect(
-      await screen.findByText(/Could not load reviews\. Check your connection and try again\./i)
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/Network error/i)).toBeInTheDocument();
+    expect(screen.getByText(/No response from the server/i)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /^retry$/i }));
     expect(reviewsListMock).toHaveBeenCalledTimes(2);
   });

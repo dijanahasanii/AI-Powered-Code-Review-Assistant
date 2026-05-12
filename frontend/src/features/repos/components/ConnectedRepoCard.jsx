@@ -87,8 +87,10 @@ export function ConnectedRepoCard({
           </p>
           <button
             type="button"
+            aria-label={`Install GitHub webhook for ${repo.full_name}`}
+            aria-busy={busySyncWebhookId === repo.id}
             className="btn-secondary mt-3 w-full justify-center gap-2 border border-amber-500/30 px-3 py-2 text-xs font-semibold hover:border-amber-400/50"
-            disabled={busySyncWebhookId === repo.id || syncAllWebhooksPending}
+            disabled={busySyncWebhookId === repo.id || syncAllWebhooksPending || disconnectPending}
             onClick={() => onSyncWebhook(repo.id)}
           >
             {busySyncWebhookId === repo.id ? <Spinner size="sm" /> : <RefreshCw size={14} aria-hidden="true" />}
@@ -101,12 +103,16 @@ export function ConnectedRepoCard({
         <button
           type="button"
           title="Review latest commit on default branch"
+          aria-label={`Review latest commit for ${repo.full_name}`}
+          aria-busy={busyReviewRepoId === repo.id}
           onClick={() => onReviewLatest(repo.id)}
-          disabled={busyReviewRepoId === repo.id}
-          className="btn-secondary inline-flex flex-1 items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium"
+          disabled={
+            busyReviewRepoId === repo.id || disconnectPending || syncAllWebhooksPending
+          }
+          className="btn-secondary inline-flex min-h-[2.25rem] min-w-0 flex-1 items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium"
         >
           {busyReviewRepoId === repo.id ? <Spinner size="sm" /> : <Sparkles size={13} aria-hidden="true" />}
-          Review latest
+          <span className="truncate">Review latest</span>
         </button>
         <button
           type="button"

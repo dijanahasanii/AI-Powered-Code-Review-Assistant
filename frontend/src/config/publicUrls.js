@@ -16,9 +16,25 @@ function readEnvTrim(name) {
 
 let prodSameOriginLogged = false;
 
+let prodLocalhostWarned = false;
+
 export function getPublicApiBaseUrl() {
   const fromEnv = readEnvTrim('VITE_API_URL');
-  if (fromEnv !== '') return stripTrailingSlashes(fromEnv);
+  if (fromEnv !== '') {
+    const stripped = stripTrailingSlashes(fromEnv);
+    if (
+      import.meta.env.PROD &&
+      !prodLocalhostWarned &&
+      /localhost|127\.0\.0\.1/i.test(stripped)
+    ) {
+      prodLocalhostWarned = true;
+      // eslint-disable-next-line no-console
+      console.warn(
+        '[deploy] VITE_API_URL points at localhost — production browsers cannot reach your machine. Set it to your public API origin (or omit it to use same-origin).'
+      );
+    }
+    return stripped;
+  }
 
   if (import.meta.env.DEV) {
     return 'http://localhost:3001';

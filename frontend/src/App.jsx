@@ -8,22 +8,13 @@ import { RequireAuthOutlet } from './components/common/RequireAuthOutlet';
 import { UiPreferencesProvider } from './context/UiPreferencesContext';
 import GitHubLanding from './pages/GitHubLanding';
 import CallbackPage from './pages/CallbackPage';
-import { Spinner } from './components/common/UI';
+import { AppRouteSkeleton } from './components/common/RouteSkeleton';
 
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 const RepositoriesPage = lazy(() => import('./pages/RepositoriesPage'));
 const ReviewsPage = lazy(() => import('./pages/ReviewsPage'));
 const ReviewDetailPage = lazy(() => import('./pages/ReviewDetailPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
-
-/** Keeps suspense fallback aligned with routed content area height inside `Layout`. */
-function RouteSkeleton() {
-  return (
-    <div className="flex min-h-[50vh] items-center justify-center" role="status" aria-label="Loading page">
-      <Spinner size="lg" />
-    </div>
-  );
-}
 
 function App() {
   return (
@@ -42,7 +33,7 @@ function App() {
                     path="dashboard"
                     element={
                       <ErrorBoundary>
-                        <Suspense fallback={<RouteSkeleton />}>
+                        <Suspense fallback={<AppRouteSkeleton />}>
                           <DashboardPage />
                         </Suspense>
                       </ErrorBoundary>
@@ -52,7 +43,7 @@ function App() {
                     path="repositories"
                     element={
                       <ErrorBoundary>
-                        <Suspense fallback={<RouteSkeleton />}>
+                        <Suspense fallback={<AppRouteSkeleton />}>
                           <RepositoriesPage />
                         </Suspense>
                       </ErrorBoundary>
@@ -62,7 +53,7 @@ function App() {
                     path="reviews"
                     element={
                       <ErrorBoundary>
-                        <Suspense fallback={<RouteSkeleton />}>
+                        <Suspense fallback={<AppRouteSkeleton />}>
                           <ReviewsPage />
                         </Suspense>
                       </ErrorBoundary>
@@ -72,7 +63,7 @@ function App() {
                     path="reviews/:id"
                     element={
                       <ErrorBoundary>
-                        <Suspense fallback={<RouteSkeleton />}>
+                        <Suspense fallback={<AppRouteSkeleton />}>
                           <ReviewDetailPage />
                         </Suspense>
                       </ErrorBoundary>
@@ -82,7 +73,7 @@ function App() {
                     path="settings"
                     element={
                       <ErrorBoundary>
-                        <Suspense fallback={<RouteSkeleton />}>
+                        <Suspense fallback={<AppRouteSkeleton />}>
                           <SettingsPage />
                         </Suspense>
                       </ErrorBoundary>

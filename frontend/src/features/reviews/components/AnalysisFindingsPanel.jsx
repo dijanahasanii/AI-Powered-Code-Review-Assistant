@@ -8,7 +8,7 @@ import {
 } from '../analysisConstants';
 import { CategoryAccordion } from './CategoryAccordion';
 
-export function AnalysisFindingsPanel({ sortedIssues, byBucket, firstNonEmptyBucketId }) {
+export function AnalysisFindingsPanel({ sortedIssues, byBucket, firstNonEmptyBucketId, reviewStatus }) {
   const rollups = useMemo(() => {
     if (!sortedIssues.length) return null;
     const bySev = { critical: 0, warning: 0, info: 0, suggestion: 0 };
@@ -22,7 +22,26 @@ export function AnalysisFindingsPanel({ sortedIssues, byBucket, firstNonEmptyBuc
     return { severityLine, themeGroups };
   }, [sortedIssues, byBucket]);
 
-  if (!sortedIssues.length || !rollups) return null;
+  if (!sortedIssues.length || !rollups) {
+    if (reviewStatus === 'failed') {
+      return (
+        <section
+          className="card mb-6 overflow-hidden border-desk-border bg-desk-panel p-5 sm:p-6"
+          aria-label="What we found"
+        >
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <ClipboardList size={16} className="shrink-0 text-desk-muted" aria-hidden="true" />
+            <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-50">What we found</h2>
+          </div>
+          <p className="text-sm leading-relaxed text-desk-muted">
+            No findings were saved — the run failed before analysis finished. Use the failure panel above to retry or
+            read the error details.
+          </p>
+        </section>
+      );
+    }
+    return null;
+  }
 
   return (
     <CollapsibleSection

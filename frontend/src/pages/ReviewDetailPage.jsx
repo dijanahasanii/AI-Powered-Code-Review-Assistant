@@ -13,6 +13,8 @@ import {
 } from 'lucide-react';
 import { reviewsApi } from '../api/client';
 import { useSocket } from '../context/SocketContext';
+import { useToast } from '../components/common/Toast';
+import { describeApiFailure } from '../lib/apiErrors';
 import { ScoreRing, SeverityBadge, StatusBadge, Spinner } from '../components/common/UI';
 import { ReviewDetailSkeleton } from '../components/common/Skeletons';
 import {
@@ -23,6 +25,7 @@ import {
 } from '../features/reviews/analysisConstants';
 import { AnalysisFindingsPanel } from '../features/reviews/components/AnalysisFindingsPanel';
 import { FilesChangedPanel } from '../features/reviews/components/FilesChangedPanel';
+import { ReviewAnalysisMetricsStrip } from '../features/reviews/components/ReviewAnalysisMetricsStrip';
 import { ReviewVerdictBanner } from '../features/reviews/components/ReviewVerdictBanner';
 import { queryKeys } from '../lib/queryKeys';
 
@@ -30,6 +33,7 @@ export default function ReviewDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const toast = useToast();
   const { connected, joinRepo, onReviewUpdate } = useSocket();
 
   const retryMutation = useMutation({
@@ -40,6 +44,11 @@ export default function ReviewDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.reviewDetail(id) });
       queryClient.invalidateQueries({ queryKey: queryKeys.reviewsAll });
+      toast.success('Retry queued', 'The worker will pick this analysis up again.');
+    },
+    onError: (err) => {
+      const { title, detail } = describeApiFailure(err, { resourceLabel: 'the retry request' });
+      toast.error(title, detail);
     },
   });
 
@@ -122,6 +131,7 @@ export default function ReviewDetailPage() {
 
   if (error) {
     const is404 = error.response?.status === 404;
+    const described = !is404 ? describeApiFailure(error, { resourceLabel: 'this review' }) : null;
     return (
       <div className="mx-auto flex max-w-4xl flex-col items-center justify-center gap-5 px-4 py-16 text-center">
         <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-red-500/35 bg-red-500/10">
@@ -129,12 +139,12 @@ export default function ReviewDetailPage() {
         </div>
         <div>
           <h1 className="mb-1 text-base font-semibold text-gray-900 dark:text-gray-100">
-            {is404 ? 'Review not found' : 'Something went wrong'}
+            {is404 ? 'Review not found' : described?.title ?? 'Could not load review'}
           </h1>
           <p className="max-w-md text-sm text-desk-muted">
             {is404
               ? 'It may have been deleted or belongs to another account.'
-              : 'We could not load this review. Try again shortly.'}
+              : described?.detail ?? 'We could not load this review. Try again shortly.'}
           </p>
         </div>
         <div className="flex flex-wrap justify-center gap-3">
@@ -142,7 +152,7 @@ export default function ReviewDetailPage() {
             <ChevronLeft size={14} aria-hidden="true" />
             All reviews
           </button>
-          {!is404 && (
+          {!is404 && described?.canRetry !== false && (
             <button
               type="button"
               onClick={() => queryClient.invalidateQueries({ queryKey: queryKeys.reviewDetail(id) })}
@@ -183,6 +193,12 @@ export default function ReviewDetailPage() {
       </Link>
 
       <section className="card mb-6 p-5 sm:p-6" aria-label="Review summary">
+        <ReviewAnalysisMetricsStrip
+          review={review}
+          issueCounts={issueCounts}
+          totalIssues={issues.length}
+          fileStats={fileStats}
+        />
         <ReviewVerdictBanner status={review.status} issueCounts={issueCounts} totalIssues={issues.length} />
         <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
           <ScoreRing score={review.overall_score} size={60} />
@@ -234,7 +250,7 @@ export default function ReviewDetailPage() {
             <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-desk-muted">
               What the scan said
             </p>
-            <p className="text-sm leading-relaxed text-gray-800 dark:text-gray-300">{review.summary}</p>
+            <p className="break-words text-sm leading-relaxed text-gray-800 dark:text-gray-300">{review.summary}</p>
           </div>
         )}
 
@@ -260,14 +276,14 @@ export default function ReviewDetailPage() {
       </section>
 
       {review.status === 'failed' && (
-        <div className="card mb-6 border-red-500/30 bg-red-500/[0.06] p-5">
+        <div className="card mb-6 border-red-500/30 bg-red-500/[0.06] p-5 sm:p-6">
           <div className="mb-4 flex items-start gap-3">
             <AlertTriangle size={18} className="mt-0.5 shrink-0 text-[#ff7b72]" aria-hidden="true" />
             <div className="min-w-0 space-y-2">
               <p className="text-sm font-semibold text-red-100/95">Analysis pipeline failed</p>
               <p className="text-xs leading-relaxed text-red-100/85">
-                This usually points to credential, GitHub access, quota, queue, or database issues—not a clean bill of
-                health for the diff itself.
+                The diff was not fully analyzed. Typical causes: GitHub token or repo access, webhook delivery,
+                worker timeouts, model/API quota, or database connectivity — not a passing grade on code quality.
               </p>
               {failureReason && (
                 <pre className="max-h-52 overflow-y-auto whitespace-pre-wrap break-words rounded-md border border-red-900/40 bg-[#010409] p-3 font-mono text-[12px] text-gray-200">
@@ -323,12 +339,22 @@ export default function ReviewDetailPage() {
         </div>
       )}
 
-      <FilesChangedPanel fileStats={fileStats} />
+      <FilesChangedPanel
+        fileStats={fileStats}
+        emptyHint={
+          (fileStats?.length ?? 0) === 0 && review.status === 'completed'
+            ? 'Per-file additions and deletions were not stored for this run. The summary and findings above still describe the change.'
+            : (fileStats?.length ?? 0) === 0 && review.status === 'failed'
+              ? 'No file stats were saved because the run did not finish successfully.'
+              : undefined
+        }
+      />
 
       <AnalysisFindingsPanel
         sortedIssues={sortedIssues}
         byBucket={byBucket}
         firstNonEmptyBucketId={firstNonEmptyBucketId}
+        reviewStatus={review.status}
       />
     </div>
   );

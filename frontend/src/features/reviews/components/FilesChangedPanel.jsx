@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { FileCode } from 'lucide-react';
 import CollapsibleSection from '../../../components/common/CollapsibleSection';
 
-export function FilesChangedPanel({ fileStats }) {
+export function FilesChangedPanel({ fileStats, emptyHint }) {
   const rollups = useMemo(() => {
     if (!fileStats?.length) return null;
     const totalAdd = fileStats.reduce((s, f) => s + (Number(f.additions) || 0), 0);
@@ -11,7 +11,21 @@ export function FilesChangedPanel({ fileStats }) {
     return { totalAdd, totalDel, withFindings };
   }, [fileStats]);
 
-  if (!fileStats?.length || !rollups) return null;
+  if (!fileStats?.length || !rollups) {
+    if (!emptyHint) return null;
+    return (
+      <section
+        className="card mb-6 overflow-hidden p-5 sm:p-6"
+        aria-label="Changed files"
+      >
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          <FileCode size={16} className="shrink-0 text-desk-muted" aria-hidden="true" />
+          <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-50">Changed files</h2>
+        </div>
+        <p className="text-sm leading-relaxed text-desk-muted">{emptyHint}</p>
+      </section>
+    );
+  }
 
   return (
     <CollapsibleSection

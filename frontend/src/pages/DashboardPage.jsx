@@ -96,6 +96,7 @@ export default function DashboardPage() {
     queryKey: queryKeys.repos,
     queryFn: () => reposApi.list().then((r) => r.data.data ?? []),
     refetchInterval: pollMs,
+    staleTime: 45_000,
   });
 
   const {

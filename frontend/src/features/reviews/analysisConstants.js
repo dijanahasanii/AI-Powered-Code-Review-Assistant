@@ -67,10 +67,25 @@ export const ANALYSIS_BUCKETS = [
 ];
 
 export const SEVERITY_ROLLUP_LABEL = {
-  critical: 'serious',
-  warning: 'warnings',
-  info: 'FYI',
-  suggestion: 'suggestions',
+  critical: 'high',
+  warning: 'medium',
+  info: 'low',
+  suggestion: 'tips',
+};
+
+/** Short tier labels for badges and summary chips (maps backend severities to risk tiers). */
+export const SEVERITY_TIER_LABEL = {
+  critical: 'High',
+  warning: 'Medium',
+  info: 'Low',
+  suggestion: 'Tip',
+};
+
+export const SEVERITY_TIER_DOT = {
+  critical: 'bg-red-500 shadow-[0_0_0_1px_rgba(248,113,113,0.35)]',
+  warning: 'bg-amber-400 shadow-[0_0_0_1px_rgba(251,191,36,0.35)]',
+  info: 'bg-sky-400 shadow-[0_0_0_1px_rgba(56,189,248,0.35)]',
+  suggestion: 'bg-violet-400 shadow-[0_0_0_1px_rgba(167,139,250,0.35)]',
 };
 
 export function bucketCategory(raw) {

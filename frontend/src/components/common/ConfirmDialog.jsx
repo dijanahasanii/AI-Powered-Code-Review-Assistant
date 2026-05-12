@@ -61,18 +61,22 @@ export default function ConfirmDialog({
               aria-hidden="true"
             />
           </div>
-          <div>
+          <div className="min-w-0 flex-1">
             <h2 id="dialog-title" className="text-sm font-semibold text-gray-900 dark:text-gray-100">
               {title}
             </h2>
             {message && (
-              <p className="mt-1 text-xs leading-relaxed text-gray-600 dark:text-gray-400">{message}</p>
+              <p className="mt-1 break-words text-xs leading-relaxed text-gray-600 dark:text-gray-400">{message}</p>
             )}
           </div>
         </div>
 
-        <div className="flex gap-2 justify-end">
-          <button type="button" onClick={onCancel} className="btn-secondary py-1.5 px-3 text-sm">
+        <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="btn-secondary w-full py-1.5 px-3 text-sm sm:w-auto"
+          >
             Cancel
           </button>
           <button
@@ -80,10 +84,10 @@ export default function ConfirmDialog({
             ref={confirmRef}
             onClick={onConfirm}
             className={clsx(
-              'inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg transition-colors',
+              'inline-flex w-full items-center justify-center gap-2 px-3 py-1.5 text-sm font-medium transition-colors sm:w-auto',
               danger
-                ? 'bg-red-600 hover:bg-red-700 text-white'
-                : 'bg-brand-600 hover:bg-brand-700 text-white'
+                ? 'rounded-lg bg-red-600 text-white hover:bg-red-700'
+                : 'rounded-lg bg-brand-600 text-white hover:bg-brand-700'
             )}
           >
             {confirmLabel}

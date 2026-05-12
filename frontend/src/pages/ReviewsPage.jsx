@@ -5,6 +5,7 @@ import { safeDistanceToNow } from '../lib/safeDates';
 import { ClipboardList, GitCommit, ChevronLeft, ChevronRight, GitBranch } from 'lucide-react';
 import clsx from 'clsx';
 import { reviewsApi } from '../api/client';
+import { describeApiFailure } from '../lib/apiErrors';
 import { useAuth } from '../context/AuthContext';
 import { ScoreRing, StatusBadge, EmptyState, PageHeader } from '../components/common/UI';
 import { ReviewCardSkeleton } from '../components/common/Skeletons';
@@ -18,7 +19,7 @@ export default function ReviewsPage() {
   const [status, setStatus] = useState('all');
   const [page, setPage] = useState(1);
 
-  const { data, isLoading, isPlaceholderData, isError, refetch } = useQuery({
+  const { data, isPending, isPlaceholderData, isError, error, refetch } = useQuery({
     queryKey: queryKeys.reviewsList({ status, page, limit: LIMIT }),
     queryFn: () =>
       reviewsApi.list({ ...(status !== 'all' && { status }), page, limit: LIMIT }).then((r) => r.data),
@@ -28,11 +29,14 @@ export default function ReviewsPage() {
   const reviews = data?.data ?? [];
   const total = data?.pagination?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / LIMIT));
+  const showReviewsSkeleton = !isError && isPending && data === undefined;
 
   const handleStatusChange = (next) => {
     setStatus(next);
     setPage(1);
   };
+
+  const loadError = isError ? describeApiFailure(error, { resourceLabel: 'the reviews list' }) : null;
 
   const emptyDescription =
     status !== 'all'
@@ -71,16 +75,15 @@ export default function ReviewsPage() {
         ))}
       </div>
 
-      {isError ? (
+      {isError && loadError ? (
         <div className="card overflow-hidden p-10 text-center">
-          <p className="mb-3 text-sm text-red-800 dark:text-red-300">
-            Could not load reviews. Check your connection and try again.
-          </p>
+          <p className="mb-1 text-sm font-semibold text-red-900 dark:text-red-200">{loadError.title}</p>
+          <p className="mb-3 text-sm text-red-800 dark:text-red-300">{loadError.detail}</p>
           <button type="button" className="btn-secondary px-4 py-2 text-xs" onClick={() => refetch()}>
             Retry
           </button>
         </div>
-      ) : isLoading ? (
+      ) : showReviewsSkeleton ? (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (
             <ReviewCardSkeleton key={i} />

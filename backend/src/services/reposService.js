@@ -5,7 +5,6 @@ const { AppError } = require('../middleware/errorHandler');
 const { logger } = require('../utils/logger');
 const usersRepository = require('../repositories/usersRepository');
 const reposRepository = require('../repositories/reposRepository');
-const reviewsRepository = require('../repositories/reviewsRepository');
 const { createOctokit, installGithubPushWebhook } = require('./githubWebhookService');
 
 async function requireGithubToken(userId) {
@@ -76,27 +75,28 @@ async function disconnectRepository(userId, repositoryId) {
 
   if (error || !repo) throw new AppError('Repository not found', 404);
 
-  if (repo.webhook_id) {
-    const token = await requireGithubToken(userId);
-    const octokit = createOctokit(token);
-    const [owner, repoName] = repo.full_name.split('/');
-    try {
-      await octokit.repos.deleteWebhook({ owner, repo: repoName, hook_id: repo.webhook_id });
-    } catch (e) {
-      logger.warn(`Could not delete webhook ${repo.webhook_id}: ${e.message}`);
-    }
-  }
-
-  const { error: revDelErr } = await reviewsRepository.deleteCodeReviewsByRepositoryId(repositoryId);
-  if (revDelErr) {
-    logger.error(`[repos] delete code_reviews for repo ${repositoryId}:`, revDelErr);
-    throw new AppError(`Could not remove reviews for this repository: ${revDelErr.message}`, 500);
-  }
-
+  // DB first: code_reviews has ON DELETE CASCADE (issues + file stats follow). Avoids an extra bulk delete
+  // round-trip and returns the HTTP response as soon as Postgres finishes.
   const { error: delErr } = await reposRepository.deleteById(repositoryId);
   if (delErr) {
     logger.error(`[repos] delete repository ${repositoryId}:`, delErr);
     throw new AppError(`Could not disconnect repository: ${delErr.message}`, 500);
+  }
+
+  // GitHub webhook removal can take seconds (TLS + API latency). Do not block the client; best-effort cleanup.
+  if (repo.webhook_id) {
+    const fullName = repo.full_name;
+    const hookId = repo.webhook_id;
+    void (async () => {
+      try {
+        const token = await requireGithubToken(userId);
+        const octokit = createOctokit(token);
+        const [owner, repoName] = fullName.split('/');
+        await octokit.repos.deleteWebhook({ owner, repo: repoName, hook_id: hookId });
+      } catch (e) {
+        logger.warn(`[repos] async webhook delete hook ${hookId} for ${fullName}: ${e.message}`);
+      }
+    })();
   }
 }
 

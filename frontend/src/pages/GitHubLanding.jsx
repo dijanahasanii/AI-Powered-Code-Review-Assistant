@@ -3,7 +3,7 @@ import { LayoutDashboard } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import LoginPage from './LoginPage';
 import LandingShell from '../components/common/LandingShell';
-import { Spinner } from '../components/common/UI';
+import { AuthLoadingLayout } from '../components/common/AuthLoadingLayout';
 
 /**
  * Home route: always the first screen (`/`). Shows GitHub connect or resume into the app.
@@ -13,18 +13,7 @@ export default function GitHubLanding() {
   const navigate = useNavigate();
 
   if (loading) {
-    return (
-      <div
-        className="flex h-screen items-center justify-center bg-desk-canvas"
-        role="status"
-        aria-label="Loading"
-      >
-        <div className="flex flex-col items-center gap-3">
-          <Spinner size="lg" />
-          <p className="text-sm text-gray-500">Loading…</p>
-        </div>
-      </div>
-    );
+    return <AuthLoadingLayout />;
   }
 
   if (user) {

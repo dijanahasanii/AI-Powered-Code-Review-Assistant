@@ -2,25 +2,32 @@ import { useState } from 'react';
 import clsx from 'clsx';
 
 // ── Badge ─────────────────────────────────────────────────────────────────────
-const SEVERITY_SIMPLE_LABEL = {
-  critical: 'Serious',
-  warning: 'Needs attention',
-  info: 'FYI',
-  suggestion: 'Suggestion',
-};
+import { SEVERITY_TIER_DOT, SEVERITY_TIER_LABEL } from '../../features/reviews/analysisConstants';
 
-export const SeverityBadge = ({ severity, plainLanguage }) => {
+export const SeverityBadge = ({ severity, plainLanguage, showTierDot = true }) => {
   const map = {
     critical: 'badge-critical',
     warning: 'badge-warning',
     info: 'badge-info',
     suggestion: 'badge-suggestion',
   };
+  const tierLabel = SEVERITY_TIER_LABEL[severity];
   const label =
-    plainLanguage && SEVERITY_SIMPLE_LABEL[severity]
-      ? SEVERITY_SIMPLE_LABEL[severity]
-      : severity;
-  return <span className={map[severity] || 'badge-info'}>{label}</span>;
+    plainLanguage && tierLabel ? tierLabel : severity;
+  const dotClass = SEVERITY_TIER_DOT[severity] ?? SEVERITY_TIER_DOT.info;
+
+  return (
+    <span className={`inline-flex items-center gap-1.5 ${map[severity] || 'badge-info'}`}>
+      {showTierDot && (
+        <span
+          className={`h-2 w-2 shrink-0 rounded-full ${dotClass}`}
+          aria-hidden="true"
+          title={tierLabel ? `${tierLabel} severity` : undefined}
+        />
+      )}
+      <span>{label}</span>
+    </span>
+  );
 };
 
 export const StatusBadge = ({ status, compact }) => {

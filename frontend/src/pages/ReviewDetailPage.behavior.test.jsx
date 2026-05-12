@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
 import ReviewDetailPage from './ReviewDetailPage';
+import { ToastProvider } from '../components/common/Toast';
 import { createTestQueryClient } from '../test/createTestQueryClient';
 
 const RID = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
@@ -70,11 +71,13 @@ function renderDetail() {
   const client = createTestQueryClient();
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={[`/reviews/${RID}`]}>
-        <Routes>
-          <Route path="/reviews/:id" element={<ReviewDetailPage />} />
-        </Routes>
-      </MemoryRouter>
+      <ToastProvider>
+        <MemoryRouter initialEntries={[`/reviews/${RID}`]}>
+          <Routes>
+            <Route path="/reviews/:id" element={<ReviewDetailPage />} />
+          </Routes>
+        </MemoryRouter>
+      </ToastProvider>
     </QueryClientProvider>
   );
 }
@@ -104,6 +107,7 @@ describe('ReviewDetailPage (user behavior)', () => {
     renderDetail();
 
     expect(await screen.findByText(/Solid change set\./)).toBeInTheDocument();
+    expect(screen.getByLabelText(/analysis summary/i)).toBeInTheDocument();
     expect(screen.getByText('org/app')).toBeInTheDocument();
     expect(screen.getByText('deadbee')).toBeInTheDocument();
     expect(screen.getByText(/Nothing flagged this time/i)).toBeInTheDocument();

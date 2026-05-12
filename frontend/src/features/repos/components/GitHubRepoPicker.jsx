@@ -1,5 +1,6 @@
 import { Search, RefreshCw, CheckCircle2, Lock, Globe } from 'lucide-react';
 import { Spinner } from '../../../components/common/UI';
+import { GitHubRepoPickerRowSkeleton } from '../../../components/common/Skeletons';
 
 export function GitHubRepoPicker({
   search,
@@ -37,9 +38,10 @@ export function GitHubRepoPicker({
       </div>
 
       {loadingGithub ? (
-        <div className="flex items-center justify-center gap-3 py-10 text-sm text-desk-muted">
-          <Spinner size="sm" />
-          Loading repositories…
+        <div className="divide-y divide-desk-border" role="status" aria-label="Loading repositories">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <GitHubRepoPickerRowSkeleton key={i} />
+          ))}
         </div>
       ) : githubError ? (
         <div className="flex flex-col items-center gap-3 px-4 py-10 text-center">
