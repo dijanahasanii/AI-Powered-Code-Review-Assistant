@@ -1,0 +1,11 @@
+title = "ai-code-review"
+
+[extend]
+useDefault = true
+
+# Synthetic diffs only — decoded at runtime in evaluation/fixtures/cases.js
+[allowlist]
+description = "Evaluation harness fixtures (not production secrets)."
+paths = [
+  '''evaluation/fixtures/''',
+]

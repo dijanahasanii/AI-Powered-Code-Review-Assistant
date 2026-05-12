@@ -6,6 +6,7 @@
  */
 
 const { iterateAddedLines, clipSnippet } = require('../lib/diffParseUtils');
+const { SECRET_STRIPE_LIKE_LINE } = require('../lib/secretRegex');
 
 const normalizePath = (p) => String(p || '').replace(/^\s*/, '').trim();
 
@@ -30,10 +31,7 @@ const RULES = [
       'This new line looks like a real key or password. Those should not live in git.',
     suggestion:
       'Move it to environment variables or a secret store. If it was real, rotate it.',
-    testLine: (t) =>
-      /\bsk_live_\S{12,}|\bsk_test-\S{10,}|AKIA[0-9A-Z]{16}\b|ADMIN_API_KEY\s*=|password\s*[:=]\s*['"][^'"]{6,}['"]/i.test(
-        t
-      ),
+    testLine: (t) => SECRET_STRIPE_LIKE_LINE.test(t),
     dedupeTerms: ['secret', 'hardcoded', 'credential', 'api key', 'password'],
   },
   {

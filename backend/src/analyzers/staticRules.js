@@ -1,9 +1,7 @@
 'use strict';
 
 const { clipSnippet } = require('../lib/diffParseUtils');
-
-const SECRET_SHAPE =
-  /\bsk_live_\S{10,}|sk-ant-api\d*|AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{20,}|xox[bap]-[A-Za-z0-9-]+|-----BEGIN\s+(RSA\s+)?PRIVATE\s+KEY-----/i;
+const { SECRET_SHAPE } = require('../lib/secretRegex');
 const JWT_ASSIGN =
   /\b[A-Z][A-Z0-9]*_(?:SECRET|KEY|TOKEN|PASSWORD)\s*=\s*['"][^'"\\]{3,512}['"]/i;
 const ADMIN_PASS_ASSIGN = /ADMIN_(PASS|PASSWORD)\s*=\s*['"][^'"]{4,}['"]/i;

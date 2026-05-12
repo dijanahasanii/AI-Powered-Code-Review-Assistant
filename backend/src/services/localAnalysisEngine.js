@@ -2,14 +2,12 @@
 
 const { logger } = require('../utils/logger');
 const { iterateAddedLines, clipSnippet } = require('../lib/diffParseUtils');
+const { SECRET_SHAPE: SECRET_REGEX } = require('../lib/secretRegex');
 
 /**
  * Zero-cost local code review — pattern scan on unified diff additions only.
  * Matches finalizeReview expectation: summary, overallScore, issues[], positives[]
  */
-
-const SECRET_REGEX =
-  /\bsk_live_\S{10,}|sk-ant-api\d*|AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{20,}|xox[bap]-[A-Za-z0-9-]+|-----BEGIN\s+(RSA\s+)?PRIVATE\s+KEY-----/i;
 
 /** ENV-style literals: JWT_SECRET = "...", API_KEY='x', etc. */
 const JWT_OR_ENV_LITERAL =

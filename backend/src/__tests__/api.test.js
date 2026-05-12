@@ -80,6 +80,13 @@ describe('Reviews API', () => {
 describe('Webhook signature verification', () => {
   const crypto = require('crypto');
 
+  it('GET webhook URL returns probe JSON (GitHub uses POST only)', async () => {
+    const res = await request(app).get('/api/webhooks/github');
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ ok: true });
+    expect(res.body.message).toMatch(/POST/i);
+  });
+
   it('rejects webhook with missing signature', async () => {
     const res = await request(app)
       .post('/api/webhooks/github')

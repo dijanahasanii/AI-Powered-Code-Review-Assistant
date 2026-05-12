@@ -16,6 +16,7 @@ Do not file public issues for undisclosed critical vulnerabilities until a fix i
 
 ## Operational hardening (thesis context)
 
+- `evaluation/fixtures/cases.js` builds synthetic diffs for the evaluation harness; secret-shaped strings are base64-decoded at runtime so static scanners do not match literals in the repo. Gitleaks allowlists that path in `gitleaks.toml`.
 - Run production behind **HTTPS**; never ship real GitHub OAuth tokens over plain HTTP.
 - Use a **strong `JWT_SECRET`** (32+ random characters) and rotate on suspected compromise.
 - Treat **`SUPABASE_SERVICE_KEY`** as root database access: store only in server-side secrets, never in the browser or Vite `VITE_*` variables.

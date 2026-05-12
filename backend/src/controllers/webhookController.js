@@ -22,6 +22,16 @@ const verifyGithubSignature = (rawBody, signatureHeader) => {
 };
 
 /**
+ * GET /api/webhooks/github — connectivity probe only. GitHub always POSTs webhook deliveries.
+ */
+const describeGithubWebhookEndpoint = (_req, res) => {
+  res.status(200).json({
+    ok: true,
+    message: 'GitHub webhook receiver is active. Deliveries use POST with a JSON body and X-Hub-Signature-256.',
+  });
+};
+
+/**
  * POST /api/webhooks/github
  * Receives push and pull_request events from GitHub
  */
@@ -213,4 +223,4 @@ const handlePullRequestEvent = async (payload) => {
   }
 };
 
-module.exports = { handleGithubWebhook };
+module.exports = { handleGithubWebhook, describeGithubWebhookEndpoint };
