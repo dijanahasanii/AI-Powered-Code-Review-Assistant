@@ -205,6 +205,8 @@ export default function RepositoriesPage() {
   const busyReviewRepoId = triggerLatestMutation.isPending ? triggerLatestMutation.variables : null;
   const busySyncWebhookId = syncWebhookMutation.isPending ? syncWebhookMutation.variables : null;
 
+  const reposLoadFailure = reposError ? describeApiFailure(reposError, { resourceLabel: 'connected repositories' }) : null;
+
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
       <ReposWebhookBanner
@@ -253,8 +255,13 @@ export default function RepositoriesPage() {
       )}
 
       {reposError ? (
-        <div className="card overflow-hidden p-10 text-center">
-          <p className="mb-3 text-sm text-red-800 dark:text-red-300">Could not load connected repositories.</p>
+        <div
+          className="card overflow-hidden p-10 text-center"
+          role="alert"
+          aria-live="polite"
+        >
+          <p className="mb-1 text-sm font-semibold text-red-900 dark:text-red-200">{reposLoadFailure.title}</p>
+          <p className="mb-3 text-sm text-red-800 dark:text-red-300">{reposLoadFailure.detail}</p>
           <button type="button" className="btn-secondary px-4 py-2 text-xs" onClick={() => refetchRepos()}>
             Retry
           </button>

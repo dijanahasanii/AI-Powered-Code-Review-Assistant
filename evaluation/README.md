@@ -21,9 +21,22 @@ During the batch run, **per-case analyzer logs are suppressed** so Git Bash / Wi
 
 ## What is measured
 
-- **Case id** — synthetic PR id from `fixtures/cases.js`.
-- **Detected issues count** — `result.issues.length` after `openaiService.analyzeCode(diff, {})`.
-- **Processing time** — wall-clock ms per case on the machine that ran the script.
-- **Notes** — short thesis-oriented label from the fixture.
+| Output | Meaning |
+|--------|--------|
+| **Case id** | Synthetic id from `fixtures/cases.js` (each row is a unified diff fixture). |
+| **Detected issues count** | `result.issues.length` after `openaiService.analyzeCode(diff, {})` — same module name as production; **not** a call to OpenAI’s HTTP API (`usesOpenAiApi === false`). |
+| **Processing time (ms)** | Wall-clock latency per case on the machine that ran the script — useful for relative comparisons (same hardware, same Node version). |
+| **Notes** | Short label from the fixture (what pattern the case is meant to exercise). |
+
+## How to interpret results
+
+- **Heuristic / static analysis only** in this configuration: counts reflect **regex and snapshot-style rules** on synthetic text, not human-level judgment and not an external LLM.
+- **Latency** is **single-machine** and includes Node startup cost amortized over many cases in one process; treat absolute ms as indicative, not a formal benchmark.
+- **Reproducibility**: re-running `npm run evaluate` on the same commit should yield the **same issue counts** for deterministic rules; timings will vary slightly.
+- **Not measured here**: webhook delivery, queue persistence, Socket.IO, database I/O, or GitHub API rate limits — those belong to integration / manual thesis demos.
 
 The harness **does not** call GitHub, enqueue webhooks, or touch the database.
+
+## Relation to production
+
+Production reviews add **GitHub tree + blob snapshot** analysis when credentials and SHAs are available; the harness forces the **diff-only** path so every case is comparable without network access. See [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md) for the full runtime pipeline.

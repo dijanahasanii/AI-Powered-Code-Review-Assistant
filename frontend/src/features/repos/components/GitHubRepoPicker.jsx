@@ -1,5 +1,6 @@
 import { Search, RefreshCw, CheckCircle2, Lock, Globe } from 'lucide-react';
 import { Spinner } from '../../../components/common/UI';
+import { describeApiFailure } from '../../../lib/apiErrors';
 import { GitHubRepoPickerRowSkeleton } from '../../../components/common/Skeletons';
 
 export function GitHubRepoPicker({
@@ -14,6 +15,10 @@ export function GitHubRepoPicker({
   connectMutationPending,
   onConnectRepo,
 }) {
+  const githubFailure = githubError
+    ? describeApiFailure(githubError, { resourceLabel: 'GitHub repository list' })
+    : null;
+
   return (
     <div className="card mb-8 overflow-hidden">
       <div className="border-b border-desk-border px-4 py-4 sm:px-5">
@@ -44,8 +49,13 @@ export function GitHubRepoPicker({
           ))}
         </div>
       ) : githubError ? (
-        <div className="flex flex-col items-center gap-3 px-4 py-10 text-center">
-          <p className="text-sm text-red-400">Unable to fetch GitHub repositories.</p>
+        <div
+          className="flex flex-col items-center gap-3 px-4 py-10 text-center"
+          role="alert"
+          aria-live="polite"
+        >
+          <p className="text-sm font-medium text-red-800 dark:text-red-200">{githubFailure.title}</p>
+          <p className="max-w-md text-xs text-red-700/95 dark:text-red-300/90">{githubFailure.detail}</p>
           <button
             type="button"
             onClick={() => onRefetchGithub()}
@@ -58,9 +68,16 @@ export function GitHubRepoPicker({
       ) : (
         <div className="max-h-80 divide-y divide-desk-border overflow-y-auto" role="list">
           {filteredRepos.length === 0 ? (
-            <p className="px-4 py-10 text-center text-sm text-desk-muted">
-              {search ? 'No repos match your search.' : 'No repositories returned for this OAuth token.'}
-            </p>
+            <div className="px-4 py-10 text-center sm:px-5">
+              <p className="text-sm font-medium text-gray-800 dark:text-gray-200">
+                {search ? 'No repositories match your search' : 'No repositories from GitHub yet'}
+              </p>
+              <p className="mx-auto mt-2 max-w-md text-xs leading-relaxed text-desk-muted">
+                {search
+                  ? 'Try a shorter query, clear the search box, or confirm the repo name on GitHub.'
+                  : 'This list uses your linked GitHub OAuth token. If you expected org repos, ensure you granted access and still have read rights — then use Retry above.'}
+              </p>
+            </div>
           ) : (
             filteredRepos.map((repo) => {
               const alreadyLinked = connectedIds.has(repo.githubRepoId);

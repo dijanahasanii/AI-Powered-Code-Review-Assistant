@@ -4,7 +4,7 @@ import {
   GitBranch,
   ClipboardList,
   LogOut,
-  WifiOff,
+  Unplug,
   Menu,
   X,
   FlaskConical,
@@ -16,6 +16,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
 import { useUiPreferences } from '../../context/UiPreferencesContext';
 import { Avatar } from './UI';
+import { BrowserOfflineBar } from './BrowserOfflineBar';
 
 const navPrimary = [
   { to: '/dashboard', icon: FlaskConical, label: 'Analysis', end: true },
@@ -56,7 +57,7 @@ function useWorkspaceBreadcrumbs() {
   }, [pathname]);
 }
 
-/** Shown only when signed in and realtime is disconnected (avoids flash before first connect). */
+/** When online but Socket.IO is down: same banner pattern as BrowserOfflineBar (lead + detail), non-blocking status. */
 function RealtimeUpdatesBanner() {
   const { user } = useAuth();
   const { connected } = useSocket();
@@ -84,11 +85,13 @@ function RealtimeUpdatesBanner() {
     <div
       role="status"
       aria-live="polite"
-      className="flex shrink-0 items-center gap-3 border-b border-amber-500/25 bg-amber-500/[0.08] px-4 py-2.5 sm:px-6"
+      className="flex shrink-0 items-start gap-2.5 border-b border-amber-500/30 bg-amber-500/[0.09] px-4 py-2.5 text-amber-950 dark:text-amber-100 sm:px-6"
     >
-      <WifiOff size={16} className="shrink-0 text-amber-800 dark:text-amber-400/95" aria-hidden="true" />
-      <p className="text-[13px] leading-snug text-amber-950 dark:text-amber-100">
-        Live updates paused — reconnecting. Analysis status may refresh a little slower until the connection is restored.
+      <Unplug size={17} className="mt-0.5 shrink-0 text-amber-800 dark:text-amber-400/95" aria-hidden="true" />
+      <p className="text-[13px] leading-snug">
+        <span className="font-semibold text-amber-950 dark:text-amber-50">Live updates paused.</span>{' '}
+        The realtime channel is reconnecting — lists and review detail still load over the API and refresh on an interval
+        until the socket is restored.
       </p>
     </div>
   );
@@ -283,6 +286,8 @@ export default function Layout() {
         </header>
 
         <WorkspaceChromeBar />
+
+        <BrowserOfflineBar />
 
         <RealtimeUpdatesBanner />
 

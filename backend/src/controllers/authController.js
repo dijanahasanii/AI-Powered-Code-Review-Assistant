@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const { supabase } = require('../config/database');
 const { AppError } = require('../middleware/errorHandler');
 const { logger } = require('../utils/logger');
+const { createGithubOAuthState, verifyGithubOAuthState } = require('../utils/githubOAuthState');
 const {
   primaryFrontendBase,
   browserOrigin,
@@ -67,6 +68,18 @@ const githubRedirect = (req, res, next) => {
       redirect_uri: githubOAuthRedirectUri(),
       scope: 'user:email read:user repo admin:repo_hook',
     });
+    // RFC 6749 / OAuth 2.0 Security BCP: unpredictable `state` echoed by GitHub mitigates login CSRF
+    // (victim tricked into completing an attacker's in-flight OAuth) without a session store — signed opaque blob.
+    let state;
+    try {
+      state = createGithubOAuthState();
+    } catch (e) {
+      if (e && e.code === 'OAUTH_STATE_CONFIG') {
+        throw new AppError('Server misconfiguration: JWT_SECRET required for secure GitHub login', 500);
+      }
+      throw e;
+    }
+    params.set('state', state);
     res.redirect(`https://github.com/login/oauth/authorize?${params}`);
   } catch (err) {
     next(err);
@@ -82,6 +95,13 @@ const githubCallback = async (req, res, next) => {
     const { code } = req.query;
     if (!code || typeof code !== 'string' || code.trim() === '') {
       throw new AppError('Authorization code missing or invalid', 400);
+    }
+
+    if (!verifyGithubOAuthState(req.query.state)) {
+      throw new AppError(
+        'Invalid or expired sign-in session — please start GitHub login again from the home page.',
+        400
+      );
     }
 
     if (!process.env.GITHUB_CLIENT_ID || !process.env.GITHUB_CLIENT_SECRET) {

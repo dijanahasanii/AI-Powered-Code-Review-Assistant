@@ -15,9 +15,10 @@ export const SeverityBadge = ({ severity, plainLanguage, showTierDot = true }) =
   const label =
     plainLanguage && tierLabel ? tierLabel : severity;
   const dotClass = SEVERITY_TIER_DOT[severity] ?? SEVERITY_TIER_DOT.info;
+  const a11yLabel = tierLabel ? `${tierLabel} severity` : `${String(severity)} severity`;
 
   return (
-    <span className={`inline-flex items-center gap-1.5 ${map[severity] || 'badge-info'}`}>
+    <span className={`inline-flex items-center gap-1.5 ${map[severity] || 'badge-info'}`} aria-label={a11yLabel}>
       {showTierDot && (
         <span
           className={`h-2 w-2 shrink-0 rounded-full ${dotClass}`}
@@ -76,7 +77,9 @@ export const EmptyState = ({ icon: Icon, title, description, action }) => (
       </div>
     )}
     <h3 className="mb-1 text-sm font-medium text-gray-800 dark:text-gray-300">{title}</h3>
-    {description && <p className="text-sm text-gray-500 max-w-xs mb-4">{description}</p>}
+    {description && (
+      <p className="mb-4 max-w-md text-sm leading-relaxed text-gray-500 break-words dark:text-gray-400">{description}</p>
+    )}
     {action}
   </div>
 );

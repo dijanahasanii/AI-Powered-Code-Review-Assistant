@@ -69,9 +69,8 @@ describe('RepositoriesPage (user behavior)', () => {
 
     renderRepos();
 
-    expect(
-      await screen.findByText(/Could not load connected repositories\./i)
-    ).toBeInTheDocument();
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    expect(await screen.findByText(/Network error|connected repositories/i)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /^retry$/i }));
     expect(reposListMock).toHaveBeenCalledTimes(2);
   });

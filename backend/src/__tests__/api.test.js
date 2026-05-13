@@ -9,6 +9,8 @@ jest.mock('../config/database', () => ({
     from: jest.fn().mockReturnThis(),
     select: jest.fn().mockReturnThis(),
     eq: jest.fn().mockReturnThis(),
+    limit: jest.fn().mockReturnThis(),
+    maybeSingle: jest.fn().mockResolvedValue({ data: { id: 'probe-row' }, error: null }),
     single: jest.fn().mockResolvedValue({
       data: { id: 'user-uuid-1', username: 'testuser', email: 'test@example.com', avatar_url: null },
       error: null,
@@ -28,13 +30,38 @@ const makeToken = (userId = 'user-uuid-1') =>
   jwt.sign({ userId }, process.env.JWT_SECRET || 'test-secret', { expiresIn: '1h' });
 
 describe('Health check', () => {
-  it('GET /health returns 200', async () => {
+  it('GET /health returns 200 with review AI info and database probe', async () => {
     const res = await request(app).get('/health');
     expect(res.status).toBe(200);
-    expect(res.body.status).toBe('ok');
+    expect(['ok', 'degraded']).toContain(res.body.status);
     expect(res.body.reviewAi).toBeDefined();
     expect(typeof res.body.reviewAi.usesOpenAiApi).toBe('boolean');
     expect(res.body.reviewAi.mode).toBeTruthy();
+    expect(res.body.database).toBeDefined();
+    expect(typeof res.body.database.reachable).toBe('boolean');
+  });
+});
+
+describe('GitHub OAuth redirect', () => {
+  it('redirects to GitHub authorize URL with signed state', async () => {
+    const res = await request(app).get('/api/auth/github').redirects(0);
+    expect(res.status).toBeGreaterThanOrEqual(300);
+    expect(res.status).toBeLessThan(400);
+    const loc = res.headers.location || '';
+    expect(loc).toMatch(/https:\/\/github\.com\/login\/oauth\/authorize\?/);
+    expect(loc).toMatch(/client_id=test-github-oauth-client-id/);
+    expect(loc).toMatch(/[?&]state=/);
+  });
+});
+
+describe('GitHub OAuth callback state', () => {
+  it('rejects token exchange when state is missing or invalid', async () => {
+    const res = await request(app).get('/api/auth/github/callback').query({
+      code: 'dummy-oauth-code',
+      redirect_uri: 'http://localhost:5173/auth/callback',
+    });
+    expect(res.status).toBe(400);
+    expect(String(res.body.error || '')).toMatch(/state|session|sign-in/i);
   });
 });
 

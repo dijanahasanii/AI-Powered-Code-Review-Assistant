@@ -40,10 +40,11 @@ attachApiContractGuard(api);
 
 export const authApi = {
   getMe: () => api.get('/api/auth/me'),
-  githubCallback: (code) =>
+  githubCallback: (code, state) =>
     api.get('/api/auth/github/callback', {
       params: {
         code,
+        ...(state ? { state } : {}),
         redirect_uri: `${window.location.origin}/auth/callback`,
       },
     }),

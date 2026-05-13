@@ -6,7 +6,7 @@ Textual flow (push / PR event):
 2. Express applies **`express.raw`** only under `/api/webhooks` so the HMAC input matches GitHub’s bytes (`server.js`).
 3. `webhookController` verifies **`X-Hub-Signature-256`**, resolves repository, deduplicates commit if needed, inserts **`code_reviews`** row, calls **`enqueueAnalyzeJob`**.
 4. Worker path: **inline** (default) or **Bull + Redis** when `QUEUE_DRIVER=redis` (`reviewQueue.js`, `queueWorker.js`).
-5. Worker fetches diff (GitHub API), runs **`analyzeCode`** pipeline, persists issues, emits **`review:update`** via Socket.IO.
+5. Worker fetches diff (GitHub API), runs **`analyzeCode`** (static snapshot rules + diff heuristics; **no OpenAI HTTP** in default build), persists issues, emits **`review:update`** via Socket.IO.
 
 ```mermaid
 flowchart LR

@@ -175,8 +175,9 @@ export default function SettingsPage() {
             <div className="border-t border-desk-border pt-5">
               <p className="font-medium text-gray-900 dark:text-gray-50">Live updates</p>
               <p className="mt-1 text-[13px] text-desk-muted">
-                When connected, review and queue changes can reach this tab over the socket; otherwise the app polls on
-                an interval. This is session-only and mirrors the banner you see if the connection drops.
+                When connected, review and queue changes reach this tab over the socket; otherwise the app polls on an
+                interval. The workspace header shows an amber strip when the socket is down, and a sky strip when the
+                browser reports offline.
               </p>
               <div
                 className={clsx(

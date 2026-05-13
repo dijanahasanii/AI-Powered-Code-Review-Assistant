@@ -1,4 +1,7 @@
 require('dotenv').config();
+const { validateProductionEnvironment } = require('./config/validateProductionEnv');
+validateProductionEnvironment();
+
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -22,6 +25,7 @@ const webhookRoutes = require('./routes/webhooks');
 const { initializeWorker } = require('./services/queueWorker');
 const { getReviewAiRuntimeInfo } = require('./services/openaiService');
 const { registerSocketIO } = require('./socket/registerSocketIO');
+const { buildHealthPayload } = require('./utils/healthPayload');
 
 const app = express();
 const httpServer = createServer(app);
@@ -100,13 +104,20 @@ app.use('/api/repos', repoRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/webhooks', webhookRoutes);
 
-app.get('/health', (req, res) =>
-  res.json({
-    status: 'ok',
-    timestamp: new Date().toISOString(),
-    reviewAi: getReviewAiRuntimeInfo(),
-  })
-);
+app.get('/health', async (_req, res) => {
+  try {
+    const body = await buildHealthPayload();
+    res.status(200).json(body);
+  } catch (e) {
+    logger.warn(`Health check unexpected error: ${e?.message || e}`);
+    res.status(200).json({
+      status: 'degraded',
+      timestamp: new Date().toISOString(),
+      reviewAi: getReviewAiRuntimeInfo(),
+      database: { reachable: false, error: 'health_handler_failed' },
+    });
+  }
+});
 
 // JSON 404 for unknown routes (Express default is plain HTML)
 app.use((_req, res) => {

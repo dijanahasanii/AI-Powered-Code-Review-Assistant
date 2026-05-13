@@ -35,6 +35,20 @@ describe('describeApiFailure', () => {
     expect(r.detail).toMatch(/No response from the server/i);
   });
 
+  it('maps 401 on GitHub-backed API paths to reconnect guidance', () => {
+    Object.defineProperty(globalThis, 'navigator', {
+      value: { ...origNavigator, onLine: true },
+      configurable: true,
+    });
+    const err = {
+      response: { status: 401, data: { error: 'GitHub access token not found' } },
+      config: { url: 'http://localhost:3001/api/repos/github' },
+    };
+    const r = describeApiFailure(err);
+    expect(r.title).toBe('GitHub or session access problem');
+    expect(r.detail).toMatch(/GitHub access token not found/);
+  });
+
   it('maps axios timeout to a clear title', () => {
     Object.defineProperty(globalThis, 'navigator', {
       value: { ...origNavigator, onLine: true },

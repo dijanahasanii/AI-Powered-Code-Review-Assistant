@@ -28,6 +28,7 @@ export default function CallbackPage() {
     }
 
     const code = searchParams.get('code');
+    const oauthState = searchParams.get('state');
     if (!code) {
       navigate('/', {
         replace: true,
@@ -40,7 +41,7 @@ export default function CallbackPage() {
 
     let pending = githubExchangeByCode.get(code);
     if (!pending) {
-      pending = authApi.githubCallback(code);
+      pending = authApi.githubCallback(code, oauthState);
       pending.finally(() => {
         githubExchangeByCode.delete(code);
         oauthSuccessGuard.delete(code);

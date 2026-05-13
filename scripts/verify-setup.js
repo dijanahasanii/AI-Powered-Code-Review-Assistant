@@ -75,9 +75,13 @@ if (!backendEnv) {
 
 const feEnv = parseEnvFile(frontendEnvPath);
 if (!feEnv) {
-  warnings.push('Missing frontend/.env — copy frontend/.env.example; VITE_GITHUB_CLIENT_ID is required for the GitHub login button');
+  warnings.push(
+    'Missing frontend/.env — copy frontend/.env.example (login uses GET /api/auth/github; VITE_GITHUB_CLIENT_ID is optional)'
+  );
 } else if (looksPlaceholder(feEnv.VITE_GITHUB_CLIENT_ID)) {
-  warnings.push('frontend/.env: set VITE_GITHUB_CLIENT_ID (must match the GitHub OAuth App client id)');
+  warnings.push(
+    'frontend/.env: VITE_GITHUB_CLIENT_ID optional — login uses server OAuth; keep backend GITHUB_CLIENT_ID aligned with your GitHub App'
+  );
 }
 
 for (const w of warnings) {

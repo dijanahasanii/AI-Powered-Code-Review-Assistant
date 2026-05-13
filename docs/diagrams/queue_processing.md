@@ -4,7 +4,7 @@ Textual overview:
 
 1. **Enqueue:** `enqueueAnalyzeJob({ reviewId, repositoryId, userId, ... })` is called from webhook or manual review routes.
 2. **Driver selection:** If `QUEUE_DRIVER !== 'redis'`, the job runs **in-process** immediately (`reviewQueue.js` → `runAnalyzeJob` in a detached promise). If `QUEUE_DRIVER === 'redis'`, Bull persists the job to **Redis** and workers consume it (`queueWorker.js` → `attachBullProcessor`).
-3. **Processing:** `runAnalyzeJob` loads repo metadata, fetches diff via GitHub when possible, calls **`openaiService.analyzeCode`** (snapshot rules when credentials + SHA available; else diff heuristics), writes results, optional PR comments, emits realtime updates.
+3. **Processing:** `runAnalyzeJob` loads repo metadata, fetches diff via GitHub when possible, calls **`openaiService.analyzeCode`** (snapshot + static rules when credentials + SHA exist; else diff heuristics — **no OpenAI HTTP** in default config), writes results, optional PR comments, emits realtime updates.
 
 ```mermaid
 flowchart TD

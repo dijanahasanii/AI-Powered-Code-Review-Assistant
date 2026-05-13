@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import LoginPage from './LoginPage';
 import LandingShell from '../components/common/LandingShell';
 import { AuthLoadingLayout } from '../components/common/AuthLoadingLayout';
+import { BrowserOfflineBar } from '../components/common/BrowserOfflineBar';
 
 /**
  * Home route: always the first screen (`/`). Shows GitHub connect or resume into the app.

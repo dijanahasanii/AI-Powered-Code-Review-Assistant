@@ -31,7 +31,9 @@
 
 ### What the system does
 
-The AI-Powered Code Review Assistant automatically analyzes source code whenever a developer pushes commits or opens a pull request on GitHub. It uses the OpenAI API (GPT-4o) to detect bugs, security vulnerabilities, performance issues, and style problems. The results are displayed in a React dashboard with real-time updates via WebSockets.
+The AI-Powered Code Review Assistant automatically analyzes source code when a developer **pushes** commits or **opens/updates a pull request** on a **connected** GitHub repository. The **default implementation** in this repository runs **repository snapshot + static rules** (and diff heuristics as a fallback) via `openaiService.analyzeCode` — **`getReviewAiRuntimeInfo().usesOpenAiApi` is `false`**, so **no OpenAI HTTP API** is called in the shipped analysis path. Results are shown in a **React** dashboard with **Socket.IO** (or polling) for live status updates.
+
+The README still documents **LLM-style prompt engineering** (§6) as a **design comparison**: how a GPT-style reviewer would be structured if wired behind the same queue and persistence layer.
 
 ### Problem it solves
 
@@ -57,7 +59,7 @@ Manual code review is time-consuming and inconsistent. Junior developers often m
 ### High-level overview
 
 ```
-GitHub (push event)
+GitHub (push / pull_request)
        │
        │ POST /api/webhooks/github
        ▼
@@ -70,22 +72,23 @@ GitHub (push event)
 │  └──────────┘  └─────────────┘  └────────┬────────┘  │
 │                                          │           │
 │  ┌────────────────────────────────────────▼────────┐ │
-│  │            Bull Job Queue (Redis)               │ │
+│  │   Job queue: in-process (default) OR Bull+Redis│ │
 │  └────────────────────────────────────────┬────────┘ │
 │                                           │          │
 │  ┌────────────────────────────────────────▼───────┐  │
 │  │               Queue Worker                     │  │
-│  │  1. Fetch diff (GitHub API)                    │  │
-│  │  2. Build prompt + call OpenAI                 │  │
-│  │  3. Parse + store results (Supabase)           │  │
-│  │  4. Emit WebSocket event                       │  │ 
+│  │  1. Fetch diff / tree (GitHub API)           │  │
+│  │  2. analyzeCode: snapshot rules + heuristics  │  │
+│  │  3. Persist results (Supabase)                │  │
+│  │  4. Emit Socket.IO review:update               │  │
 │  └────────────────────────────────────────────────┘  │
 └──────────────────────────────────────────────────────┘
        │                    │                │
-  OpenAI API          Supabase DB      Socket.io
-  (GPT-4o)          (PostgreSQL)    (Real-time WS)
-                                          │
-                                          ▼
+  (optional LLM)      Supabase DB      Socket.io
+  not used in         (PostgreSQL)    (real-time UI)
+  default build
+       │
+       ▼
                            ┌─────────────────────────┐
                            │    React Dashboard      │
                            │  (Vite + Tailwind CSS)  │
@@ -94,11 +97,12 @@ GitHub (push event)
 
 ### How components interact
 
-1. **GitHub** sends webhook POST requests to the backend whenever code is pushed
-2. **Backend** verifies the webhook signature, creates a review record, and adds a job to the Redis queue
-3. **Queue Worker** picks up the job, fetches the git diff via GitHub API, builds an AI prompt, calls OpenAI, parses the structured JSON response, and saves results to Supabase
-4. **Socket.io** pushes a `review:update` event to the React dashboard in real time
-5. **React Dashboard** updates the UI immediately without requiring a page refresh
+1. **GitHub** sends webhook POST requests to the backend on **push** and **pull_request** events (when a repo hook is installed).
+2. **Backend** verifies the webhook signature, creates a review record, and **enqueues** work (**in-process** by default, or **Bull + Redis** when configured).
+3. **Queue worker** runs **`analyzeCode`** (snapshot + static rules when possible; diff heuristics otherwise — **no OpenAI call** in the default `usesOpenAiApi === false` configuration), saves results to Supabase, and emits **`review:update`** over Socket.IO.
+4. **React dashboard** listens (socket + React Query invalidation) and refreshes lists and detail views.
+
+**Concise architecture narrative (thesis):** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ---
 
@@ -119,7 +123,7 @@ users
 ├── id (UUID PK)
 ├── github_id (BIGINT UNIQUE)
 ├── username, email, avatar_url
-├── access_token (encrypted GitHub OAuth token)
+├── access_token (GitHub OAuth token — plaintext in this thesis build; see SECURITY.md)
 └── created_at, updated_at
 
 repositories
@@ -220,7 +224,7 @@ backend/
 
 ### Authentication
 
-Uses GitHub OAuth 2.0 for login. After OAuth, the backend issues its own JWT (7-day expiry). The JWT is stored in `localStorage` on the frontend and sent as a `Bearer` token on every request. The `authenticate` middleware verifies the JWT and fetches the user from the database.
+Uses GitHub OAuth 2.0 for login. The SPA navigates to **`GET /api/auth/github`**, which redirects to GitHub with a signed **`state`** parameter (CSRF mitigation); GitHub returns to `/auth/callback` with **`code`** and **`state`**, and the SPA calls **`GET /api/auth/github/callback`** to complete the exchange. After OAuth, the backend issues its own JWT (7-day expiry). The JWT is stored in `localStorage` on the frontend and sent as a `Bearer` token on every request. The `authenticate` middleware verifies the JWT and fetches the user from the database.
 
 ### Error handling strategy
 
@@ -290,9 +294,11 @@ frontend/src/
 
 ---
 
-## 6. AI Prompt Engineering
+## 6. AI / structured output design (LLM-oriented reference)
 
-### System prompt design
+> **Scope:** The **running** worker uses **static rules + heuristics** (`usesOpenAiApi === false`). This section documents how a **hypothetical GPT-style** reviewer would be engineered behind the same JSON persistence shape — useful for thesis comparison and future extension.
+
+### System prompt design (LLM variant)
 
 The system prompt instructs GPT-4o to:
 1. Act as a **senior software engineer** doing a code review
@@ -494,7 +500,7 @@ Use `supertest` to test routes against the Express app with a mocked Supabase cl
 | Push with no code changes (only config files) | Review created with "No changes" summary |
 | Push with binary files only (.png, .pdf) | Binary files filtered out, empty diff handled |
 | Diff > 20,000 characters | Diff truncated with note appended |
-| OpenAI returns malformed JSON | Retry up to 3 times, then mark review as failed |
+| LLM returns malformed JSON (if enabled) | Retry up to 3 times, then mark review as failed |
 | GitHub webhook secret mismatch | 401 returned immediately |
 | Duplicate webhook for same commit | Checked before insert, silently ignored |
 | User disconnects repo mid-review | Worker logs warning, review marked failed |
@@ -651,7 +657,7 @@ Here is the complete journey from a code push to seeing results in the dashboard
 1. **Developer pushes code** to a GitHub branch on a connected repository
 2. **GitHub delivers a webhook** POST to `/api/webhooks/github` with the commit details
 3. **Backend verifies the signature** using HMAC-SHA256 to confirm it genuinely came from GitHub
-4. **Backend creates a review record** in the database with `status: pending`, then adds a job to the Redis queue and immediately returns `200 OK` to GitHub
+4. **Backend creates a review record** in the database with `status: pending`, **enqueues** analysis (**in-process** by default, or **Bull + Redis** when configured), and immediately returns `200 OK` to GitHub
 5. **Queue worker picks up the job** and changes the status to `processing`
 6. **Worker fetches the git diff** for that specific commit from the GitHub API (when available)
 7. **Worker runs the analysis pipeline** — repository snapshot + static rules and diff heuristics (no OpenAI call in the current `usesOpenAiApi === false` configuration)
@@ -698,7 +704,7 @@ cp frontend/.env.example frontend/.env
 npm run verify:setup
 ```
 
-Checks Node 20 parity, required Supabase + JWT keys in `backend/.env`, and warns on missing GitHub / frontend OAuth values.
+Checks Node 20 parity, required Supabase + JWT keys in `backend/.env`, and warns on missing GitHub / webhook / frontend values (see `scripts/verify-setup.js`).
 
 For **CORS, Socket.IO, and OAuth** when testing from a LAN IP, IPv6 loopback, or a custom local hostname, see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) (section *Browser origins*).
 
@@ -714,7 +720,7 @@ npm run dev
 # Frontend runs on :5173
 ```
 
-Smoke check: `curl -s http://localhost:3001/health` (or open in a browser) should return JSON with `"status":"ok"`.
+Smoke check: `curl -s http://localhost:3001/health` should return JSON with `"status":"ok"` or `"status":"degraded"` and a `database` object (`reachable` reflects a lightweight Supabase probe — see `backend/src/utils/healthPayload.js`).
 
 ### 4b. Docker Compose (optional)
 
@@ -745,7 +751,7 @@ High-level behavior you can rely on when operating or debugging this stack.
 
 1. A row is created in `code_reviews` with `status: pending` (manual trigger, webhook, or duplicate-commit resolution).
 2. Work is **queued**: either **in-process** (`QUEUE_DRIVER` unset or not `redis`) or **Bull + Redis** (`reviewQueue.add`).
-3. The worker loads the diff (GitHub API), runs analysis (OpenAI / rules), writes `review_issues` and `review_file_stats`, sets `status: completed` or `failed`, and emits **`review:update`** over Socket.io.
+3. The worker loads the diff (GitHub API), runs **snapshot + static analysis** (`analyzeCode` — no OpenAI HTTP call in the default build), writes `review_issues` and `review_file_stats`, sets `status: completed` or `failed`, and emits **`review:update`** over Socket.io.
 
 ### GitHub → webhook → review
 
@@ -777,6 +783,7 @@ These artifacts are **additive documentation** and an **offline evaluation harne
 
 | Artifact | Purpose |
 |----------|---------|
+| **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** | Narrative: webhook → queue → analysis → sockets; separation; tradeoffs. |
 | **[evaluation/README.md](evaluation/README.md)** | How to run the synthetic diff benchmark. |
 | **[evaluation/results.md](evaluation/results.md)** | Generated table (`npm run evaluate` from repo root). |
 | **[docs/THREAT_MODEL.md](docs/THREAT_MODEL.md)** | Threat list mapped to existing mitigations (no code changes). |

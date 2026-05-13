@@ -16,6 +16,17 @@ function appearsOffline() {
   return navigator.onLine === false;
 }
 
+/** True for repo/review routes that often fail when the stored GitHub token is stale (not /api/auth/*). */
+function isGithubBackedResourceRequest(err) {
+  const raw = err?.config?.url;
+  if (typeof raw !== 'string') return false;
+  const path = raw.includes('/api/') ? raw.slice(raw.indexOf('/api')) : raw;
+  if (path.startsWith('/api/auth/')) return false;
+  if (path.startsWith('/api/repos')) return true;
+  if (path.startsWith('/api/reviews')) return true;
+  return false;
+}
+
 function webhookHintFromMessage(msg) {
   if (typeof msg !== 'string') return null;
   const m = msg.toLowerCase();
@@ -86,7 +97,7 @@ export function describeApiFailure(error, opts = {}) {
       return {
         title: 'Request timed out',
         detail:
-          'The server or upstream (GitHub, model API) took too long to answer. Try again in a moment or check backend logs.',
+          'The server or GitHub took too long to answer. Try again in a moment or check backend logs.',
         canRetry: true,
       };
     }
@@ -114,6 +125,17 @@ export function describeApiFailure(error, opts = {}) {
   }
 
   if (status === 401 || status === 403) {
+    if (isGithubBackedResourceRequest(error)) {
+      return {
+        title: 'GitHub or session access problem',
+        detail:
+          apiMsg ||
+          (status === 401
+            ? 'Your app session or stored GitHub token may be invalid or expired. Sign out, sign in again with GitHub from the home page, then retry. Org repos need the same OAuth scopes you granted at login.'
+            : 'GitHub denied this action (permissions, token, or repository visibility). Confirm you still have access to the repo and required scopes; sign out and sign in again if your token was revoked.'),
+        canRetry: status === 401,
+      };
+    }
     return {
       title: status === 401 ? 'Sign-in required' : 'Access denied',
       detail:

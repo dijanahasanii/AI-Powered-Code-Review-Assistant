@@ -153,7 +153,7 @@ export default function DashboardPage() {
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
         {statsError ? (
-          <div className="card border-red-500/25 bg-red-500/[0.07] p-4 sm:col-span-3">
+          <div className="card border-red-500/25 bg-red-500/[0.07] p-4 sm:col-span-3" role="alert" aria-live="polite">
             <p className="text-sm text-red-800 dark:text-red-200">Could not load dashboard statistics.</p>
             <button
               type="button"
@@ -287,7 +287,7 @@ export default function DashboardPage() {
 
         <div className="card flex min-h-0 flex-col overflow-hidden p-0 lg:mb-0 lg:h-full">
           {reviewsError ? (
-            <div className="flex flex-1 flex-col justify-center border-b border-transparent px-4 py-12 text-center sm:px-5">
+            <div className="flex flex-1 flex-col justify-center border-b border-transparent px-4 py-12 text-center sm:px-5" role="alert" aria-live="polite">
               <p className="text-sm text-red-800 dark:text-red-300">Could not load recent activity.</p>
               <button
                 type="button"

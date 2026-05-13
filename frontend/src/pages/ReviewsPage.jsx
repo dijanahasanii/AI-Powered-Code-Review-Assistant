@@ -76,7 +76,7 @@ export default function ReviewsPage() {
       </div>
 
       {isError && loadError ? (
-        <div className="card overflow-hidden p-10 text-center">
+        <div className="card overflow-hidden p-10 text-center" role="alert" aria-live="polite">
           <p className="mb-1 text-sm font-semibold text-red-900 dark:text-red-200">{loadError.title}</p>
           <p className="mb-3 text-sm text-red-800 dark:text-red-300">{loadError.detail}</p>
           <button type="button" className="btn-secondary px-4 py-2 text-xs" onClick={() => refetch()}>
@@ -91,7 +91,19 @@ export default function ReviewsPage() {
         </div>
       ) : reviews.length === 0 ? (
         <div className="card overflow-hidden">
-          <EmptyState icon={ClipboardList} title="No reviews found" description={emptyDescription} />
+          <EmptyState
+            icon={ClipboardList}
+            title="No reviews found"
+            description={emptyDescription}
+            action={
+              <Link
+                to="/repositories"
+                className="btn-secondary inline-flex px-4 py-2 text-xs font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/55 focus-visible:ring-offset-2 focus-visible:ring-offset-desk-canvas dark:focus-visible:ring-offset-desk-panel"
+              >
+                Go to repositories
+              </Link>
+            }
+          />
         </div>
       ) : (
         <>
