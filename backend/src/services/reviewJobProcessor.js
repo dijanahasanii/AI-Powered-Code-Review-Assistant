@@ -1,6 +1,7 @@
 const { supabase } = require('../config/database');
 const { analyzeCode } = require('./openaiService');
 const { fetchCommitDiff, postPRComments } = require('./githubService');
+const { generateAndPersistReport } = require('./reportGeneratorService');
 const { logger } = require('../utils/logger');
 
 let ioSingleton = null;
@@ -63,6 +64,28 @@ async function runAnalyzeJob(jobData, { rethrowOnError = false } = {}) {
 
     await finalizeReview(reviewId, analysis, fileStats);
 
+    try {
+      const { data: reviewRow } = await supabase
+        .from('code_reviews')
+        .select('branch, triggered_by')
+        .eq('id', reviewId)
+        .single();
+
+      await generateAndPersistReport({
+        reviewId,
+        repositoryId,
+        repositoryName: repo?.name || repoFullName.split('/').pop(),
+        branch: reviewRow?.branch,
+        commitSha,
+        triggeredBy: reviewRow?.triggered_by,
+        analysis,
+      });
+    } catch (reportErr) {
+      logger.error(`Report generation failed (review still completed): ${reportErr.message}`, {
+        reviewId,
+      });
+    }
+
     if (prNumber) {
       await postPRComments(repoFullName, prNumber, commitSha, analysis.issues, userId);
     }
@@ -99,6 +122,11 @@ function attachBullProcessor() {
 
   reviewQueue.process('analyze', 3, async (job) => {
     await runAnalyzeJob(job.data, { rethrowOnError: true });
+  });
+
+  reviewQueue.process('remediate', 1, async (job) => {
+    const { runRemediation } = require('./remediationService');
+    await runRemediation(job.data);
   });
 }
 

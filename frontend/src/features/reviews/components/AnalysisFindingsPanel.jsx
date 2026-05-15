@@ -1,14 +1,16 @@
 import { useMemo } from 'react';
 import { ClipboardList } from 'lucide-react';
 import CollapsibleSection from '../../../components/common/CollapsibleSection';
+import { SeverityBadge } from '../../../components/common/UI';
 import {
   ANALYSIS_BUCKETS,
   SEVERITY_ORDER,
   SEVERITY_ROLLUP_LABEL,
+  bucketCategoryForSeverityJump,
 } from '../analysisConstants';
 import { CategoryAccordion } from './CategoryAccordion';
 
-export function AnalysisFindingsPanel({ sortedIssues, byBucket, firstNonEmptyBucketId, reviewStatus }) {
+export function AnalysisFindingsPanel({ sortedIssues, byBucket, reviewStatus, variant = 'review' }) {
   const rollups = useMemo(() => {
     if (!sortedIssues.length) return null;
     const bySev = { critical: 0, warning: 0, info: 0, suggestion: 0 };
@@ -19,8 +21,23 @@ export function AnalysisFindingsPanel({ sortedIssues, byBucket, firstNonEmptyBuc
       .map((s) => `${bySev[s]} ${SEVERITY_ROLLUP_LABEL[s]}`)
       .join(' · ');
     const themeGroups = ANALYSIS_BUCKETS.reduce((n, b) => n + ((byBucket[b.id] ?? []).length > 0 ? 1 : 0), 0);
-    return { severityLine, themeGroups };
+    return { severityLine, themeGroups, bySev };
   }, [sortedIssues, byBucket]);
+
+  const bucketList = useMemo(
+    () =>
+      ANALYSIS_BUCKETS.map((bucket) =>
+        byBucket[bucket.id]?.length ? (
+          <CategoryAccordion
+            key={bucket.id}
+            bucket={bucket}
+            issues={byBucket[bucket.id]}
+            initiallyOpen={false}
+          />
+        ) : null
+      ),
+    [byBucket]
+  );
 
   if (!sortedIssues.length || !rollups) {
     if (reviewStatus === 'failed') {
@@ -41,6 +58,41 @@ export function AnalysisFindingsPanel({ sortedIssues, byBucket, firstNonEmptyBuc
       );
     }
     return null;
+  }
+
+  if (variant === 'report') {
+    return (
+      <section className="scroll-mt-6" aria-labelledby="report-findings-heading">
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2
+              id="report-findings-heading"
+              className="text-sm font-semibold uppercase tracking-wider text-desk-muted"
+            >
+              Findings
+            </h2>
+            <p className="mt-1 text-sm text-desk-muted">
+              Expand a category to inspect individual issues, snippets, and file locations.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2" aria-label="Jump to category by severity">
+            {SEVERITY_ORDER.map((sev) =>
+              rollups.bySev[sev] > 0 ? (
+                <a
+                  key={sev}
+                  href={`#analysis-${bucketCategoryForSeverityJump(sev, byBucket)}`}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-desk-border bg-desk-canvas/80 px-2.5 py-1 text-[11px] transition-colors hover:border-brand-500/35 hover:bg-brand-500/10"
+                >
+                  <SeverityBadge severity={sev} plainLanguage />
+                  <span className="tabular-nums text-desk-muted">{rollups.bySev[sev]}</span>
+                </a>
+              ) : null
+            )}
+          </div>
+        </div>
+        <div className="mt-4 flex flex-col gap-3">{bucketList}</div>
+      </section>
+    );
   }
 
   return (
@@ -67,18 +119,7 @@ export function AnalysisFindingsPanel({ sortedIssues, byBucket, firstNonEmptyBuc
         Each topic opens on its own. Inside you will see rule names and code snippets — the section above stays in plain
         English.
       </p>
-      <div className="flex flex-col gap-4">
-        {ANALYSIS_BUCKETS.map((bucket) =>
-          byBucket[bucket.id]?.length ? (
-            <CategoryAccordion
-              key={bucket.id}
-              bucket={bucket}
-              issues={byBucket[bucket.id]}
-              initiallyOpen={bucket.id === firstNonEmptyBucketId}
-            />
-          ) : null
-        )}
-      </div>
+      <div className="flex flex-col gap-4">{bucketList}</div>
     </CollapsibleSection>
   );
 }

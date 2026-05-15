@@ -9,4 +9,8 @@ export const queryKeys = {
   reviewsAll: ['reviews'],
   reviewsList: (params) => ['reviews', params],
   reviewDetail: (id) => ['review', id],
+  reportsAll: ['reports'],
+  reportsList: (params) => ['reports', params],
+  reportDetail: (id) => ['report', id],
+  reportMarkdown: (id) => ['report-markdown', id],
 };

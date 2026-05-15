@@ -21,6 +21,7 @@ const { rateLimiter } = require('./middleware/rateLimiter');
 const authRoutes = require('./routes/auth');
 const repoRoutes = require('./routes/repos');
 const reviewRoutes = require('./routes/reviews');
+const reportRoutes = require('./routes/reports');
 const webhookRoutes = require('./routes/webhooks');
 const { initializeWorker } = require('./services/queueWorker');
 const { getReviewAiRuntimeInfo } = require('./services/openaiService');
@@ -102,6 +103,7 @@ app.use(rateLimiter);
 app.use('/api/auth', authRoutes);
 app.use('/api/repos', repoRoutes);
 app.use('/api/reviews', reviewRoutes);
+app.use('/api/reports', reportRoutes);
 app.use('/api/webhooks', webhookRoutes);
 
 app.get('/health', async (_req, res) => {

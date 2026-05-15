@@ -15,6 +15,8 @@ const RepositoriesPage = lazy(() => import('./pages/RepositoriesPage'));
 const ReviewsPage = lazy(() => import('./pages/ReviewsPage'));
 const ReviewDetailPage = lazy(() => import('./pages/ReviewDetailPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
+const ReportsPage = lazy(() => import('./pages/ReportsPage'));
+const ReportDetailPage = lazy(() => import('./pages/ReportDetailPage'));
 
 function App() {
   return (
@@ -65,6 +67,26 @@ function App() {
                       <ErrorBoundary>
                         <Suspense fallback={<AppRouteSkeleton />}>
                           <ReviewDetailPage />
+                        </Suspense>
+                      </ErrorBoundary>
+                    }
+                  />
+                  <Route
+                    path="reports"
+                    element={
+                      <ErrorBoundary>
+                        <Suspense fallback={<AppRouteSkeleton />}>
+                          <ReportsPage />
+                        </Suspense>
+                      </ErrorBoundary>
+                    }
+                  />
+                  <Route
+                    path="reports/:id"
+                    element={
+                      <ErrorBoundary>
+                        <Suspense fallback={<AppRouteSkeleton />}>
+                          <ReportDetailPage />
                         </Suspense>
                       </ErrorBoundary>
                     }

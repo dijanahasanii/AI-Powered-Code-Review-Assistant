@@ -67,4 +67,11 @@ export const reviewsApi = {
   retryPending: (reviewId) => api.post(`/api/reviews/retry/${reviewId}`),
 };
 
+export const reportsApi = {
+  list: (params) => api.get('/api/reports', { params }),
+  getOne: (id, config) => api.get(`/api/reports/${id}`, config),
+  getMarkdown: (id) => api.get(`/api/reports/${id}/markdown`),
+  confirmRemediation: (id) => api.post(`/api/reports/${id}/confirm-remediation`),
+};
+
 export default api;

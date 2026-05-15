@@ -67,7 +67,7 @@ export function CategoryAccordion({ bucket, issues, initiallyOpen }) {
               <IssueAccordionRow
                 key={issue.id ?? `${bucket.id}-${i}-${issue.line_number ?? 'x'}`}
                 issue={issue}
-                defaultOpen={i === 0 && issues.length <= 2}
+                defaultOpen={false}
               />
             ))}
           </div>

@@ -15,6 +15,9 @@ dist/
 build/
 .vite/
 
+# Generated analysis reports (persisted at runtime)
+backend/reports/
+
 # Logs
 logs/
 *.log

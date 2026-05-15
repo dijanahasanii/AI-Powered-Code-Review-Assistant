@@ -24,6 +24,7 @@ function isGithubBackedResourceRequest(err) {
   if (path.startsWith('/api/auth/')) return false;
   if (path.startsWith('/api/repos')) return true;
   if (path.startsWith('/api/reviews')) return true;
+  if (path.startsWith('/api/reports')) return true;
   return false;
 }
 
@@ -152,6 +153,16 @@ export function describeApiFailure(error, opts = {}) {
       title: 'Request could not be processed',
       detail: apiMsg || 'The server rejected the payload. Check inputs and try again.',
       canRetry: false,
+    };
+  }
+
+  if (status === 503) {
+    return {
+      title: 'Database setup required',
+      detail:
+        apiMsg ||
+        'The AI Reports table has not been created yet. Run the migration SQL in your Supabase project (see backend/migrations/add_analysis_reports.sql), then retry.',
+      canRetry: true,
     };
   }
 

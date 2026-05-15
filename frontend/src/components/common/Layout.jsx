@@ -3,6 +3,7 @@ import { Outlet, NavLink, useNavigate, Link, useLocation } from 'react-router-do
 import {
   GitBranch,
   ClipboardList,
+  FileText,
   LogOut,
   Unplug,
   Menu,
@@ -22,6 +23,7 @@ const navPrimary = [
   { to: '/dashboard', icon: FlaskConical, label: 'Analysis', end: true },
   { to: '/repositories', icon: GitBranch, label: 'Repos', end: false },
   { to: '/reviews', icon: ClipboardList, label: 'Reviews', end: true },
+  { to: '/reports', icon: FileText, label: 'AI Reports', end: true },
 ];
 
 function useWorkspaceBreadcrumbs() {
@@ -41,6 +43,17 @@ function useWorkspaceBreadcrumbs() {
       return [
         { label: 'Workspace', to: '/dashboard' },
         { label: 'Reviews', to: '/reviews', current: true },
+      ];
+    if (pathname === '/reports')
+      return [
+        { label: 'Workspace', to: '/dashboard' },
+        { label: 'AI Reports', to: '/reports', current: true },
+      ];
+    if (/^\/reports\/[^/]+$/.test(pathname))
+      return [
+        { label: 'Workspace', to: '/dashboard' },
+        { label: 'AI Reports', to: '/reports' },
+        { label: 'Report', to: pathname, current: true },
       ];
     if (/^\/reviews\/[^/]+$/.test(pathname))
       return [

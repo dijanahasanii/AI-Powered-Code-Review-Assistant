@@ -18,7 +18,6 @@ import { describeApiFailure } from '../lib/apiErrors';
 import { ScoreRing, SeverityBadge, StatusBadge, Spinner } from '../components/common/UI';
 import { ReviewDetailSkeleton } from '../components/common/Skeletons';
 import {
-  ANALYSIS_BUCKETS,
   SEVERITY_ORDER,
   bucketCategory,
   bucketCategoryForSeverityJump,
@@ -108,11 +107,6 @@ export default function ReviewDetailPage() {
         return acc;
       }, {}),
     [issues]
-  );
-
-  const firstNonEmptyBucketId = useMemo(
-    () => ANALYSIS_BUCKETS.find((b) => (byBucket[b.id] ?? []).length > 0)?.id,
-    [byBucket]
   );
 
   if (!reviewIdPresent) {
@@ -353,7 +347,6 @@ export default function ReviewDetailPage() {
       <AnalysisFindingsPanel
         sortedIssues={sortedIssues}
         byBucket={byBucket}
-        firstNonEmptyBucketId={firstNonEmptyBucketId}
         reviewStatus={review.status}
       />
     </div>

@@ -8,6 +8,7 @@ import {
   FlaskConical,
   GitBranch,
   ClipboardList,
+  FileText,
   Sun,
   Moon,
   Monitor,
@@ -282,6 +283,16 @@ export default function SettingsPage() {
                   <ClipboardList size={17} className="text-brand-400" aria-hidden="true" />
                   <span className="font-sans text-gray-900 dark:text-gray-100">Reviews</span>
                   <span className="text-desk-subtle">/reviews</span>
+                </Link>
+              </li>
+              <li>
+                <Link
+                  to="/reports"
+                  className="flex items-center gap-3 px-5 py-3.5 transition-colors hover:bg-desk-elevated/35"
+                >
+                  <FileText size={17} className="text-brand-400" aria-hidden="true" />
+                  <span className="font-sans text-gray-900 dark:text-gray-100">AI Reports</span>
+                  <span className="text-desk-subtle">/reports</span>
                 </Link>
               </li>
             </ul>

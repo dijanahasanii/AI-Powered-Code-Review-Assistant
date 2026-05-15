@@ -101,4 +101,48 @@
     @apply inline-flex items-center rounded-full border border-purple-500/20 bg-purple-500/15 px-2 py-0.5 text-xs font-medium text-purple-800
            dark:text-purple-400;
   }
+
+  .report-markdown h1 {
+    @apply mb-4 mt-0 text-lg font-bold text-gray-900 dark:text-gray-50;
+  }
+  .report-markdown h2 {
+    @apply mb-3 mt-6 border-b border-desk-border pb-2 text-base font-semibold text-gray-900 dark:text-gray-100;
+  }
+  .report-markdown h3 {
+    @apply mb-2 mt-4 text-sm font-semibold text-gray-800 dark:text-gray-200;
+  }
+  .report-markdown p {
+    @apply my-2 text-sm leading-relaxed text-desk-muted;
+  }
+  .report-markdown ul {
+    @apply my-2 list-disc space-y-1 pl-5 text-sm text-desk-muted;
+  }
+  .report-markdown table {
+    @apply my-4 w-full border-collapse overflow-hidden rounded-lg border border-desk-border text-sm;
+  }
+  .report-markdown th {
+    @apply bg-desk-elevated/80 px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-desk-muted;
+  }
+  .report-markdown td {
+    @apply border-t border-desk-border px-3 py-2 text-gray-800 dark:text-gray-200;
+  }
+  .report-markdown code {
+    @apply rounded bg-desk-elevated px-1.5 py-0.5 font-mono text-[12px] text-brand-500;
+  }
+  .report-markdown pre {
+    @apply my-3 overflow-x-auto rounded-lg border border-desk-border bg-desk-elevated p-3 font-mono text-xs text-desk-muted;
+  }
+  .report-markdown pre code {
+    @apply bg-transparent p-0 text-inherit;
+  }
+  .report-markdown hr {
+    @apply my-6 border-desk-border;
+  }
+  .report-markdown strong {
+    @apply font-semibold text-gray-200;
+  }
+
+  .report-markdown-archive h2:first-of-type {
+    @apply mt-0;
+  }
 }

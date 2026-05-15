@@ -79,10 +79,33 @@ CREATE INDEX IF NOT EXISTS idx_code_reviews_status ON code_reviews(status);
 CREATE INDEX IF NOT EXISTS idx_review_issues_review_id ON review_issues(review_id);
 CREATE INDEX IF NOT EXISTS idx_review_issues_severity ON review_issues(severity);
 
+CREATE TABLE IF NOT EXISTS analysis_reports (
+  id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  review_id           UUID UNIQUE NOT NULL REFERENCES code_reviews(id) ON DELETE CASCADE,
+  repository_id       UUID NOT NULL REFERENCES repositories(id) ON DELETE CASCADE,
+  repository_name     VARCHAR(255) NOT NULL,
+  analyzed_branch     VARCHAR(255),
+  commit_sha          VARCHAR(40),
+  report_path         TEXT NOT NULL,
+  issue_count         INTEGER DEFAULT 0,
+  severity_summary    JSONB DEFAULT '{}'::jsonb,
+  analysis_type       VARCHAR(100),
+  remediation_status  VARCHAR(50) DEFAULT 'pending',
+  remediation_log     TEXT,
+  push_commit_sha     VARCHAR(40),
+  pushed_at           TIMESTAMPTZ,
+  created_at          TIMESTAMPTZ DEFAULT NOW(),
+  updated_at          TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_analysis_reports_repository_id ON analysis_reports(repository_id);
+CREATE INDEX IF NOT EXISTS idx_analysis_reports_created_at ON analysis_reports(created_at DESC);
+
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE repositories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE code_reviews ENABLE ROW LEVEL SECURITY;
 ALTER TABLE review_issues ENABLE ROW LEVEL SECURITY;
+ALTER TABLE analysis_reports ENABLE ROW LEVEL SECURITY;
 
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$

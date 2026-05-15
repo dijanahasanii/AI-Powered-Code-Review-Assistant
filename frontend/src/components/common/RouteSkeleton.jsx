@@ -19,6 +19,12 @@ export function AppRouteSkeleton() {
   if (pathname.startsWith('/reviews')) {
     return <ReviewsPageSkeleton />;
   }
+  if (/^\/reports\/[^/]+$/.test(pathname)) {
+    return <ReviewDetailSkeleton />;
+  }
+  if (pathname.startsWith('/reports')) {
+    return <ReviewsPageSkeleton />;
+  }
   if (pathname.startsWith('/repositories')) {
     return <RepositoriesPageSkeleton />;
   }

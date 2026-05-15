@@ -385,4 +385,9 @@ const isBinaryPath = (filePath) => {
   return binaryExtensions.some((ext) => filePath.toLowerCase().endsWith(ext));
 };
 
-module.exports = { fetchCommitDiff, fetchRepoSourceFilesAtCommit, postPRComments };
+module.exports = {
+  fetchCommitDiff,
+  fetchRepoSourceFilesAtCommit,
+  postPRComments,
+  loadUserAccessToken,
+};
