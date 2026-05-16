@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   Lock,
   Globe,
@@ -6,8 +8,11 @@ import {
   Sparkles,
   Trash2,
   AlertOctagon,
+  GitBranch,
 } from 'lucide-react';
 import { Spinner } from '../../../components/common/UI';
+import { reposApi } from '../../../api/client';
+import { queryKeys } from '../../../lib/queryKeys';
 import { getCompletedReviewsNewestFirst, repoHealthStatus } from '../lib/repoReviewStats';
 
 export function ConnectedRepoCard({
@@ -20,9 +25,32 @@ export function ConnectedRepoCard({
   onSyncWebhook,
   onDisconnect,
 }) {
+  const [selectedBranch, setSelectedBranch] = useState('');
+  const [loadBranches, setLoadBranches] = useState(false);
+
+  const { data: branchData, isLoading: branchesLoading } = useQuery({
+    queryKey: queryKeys.repoBranches(repo.id),
+    queryFn: () => reposApi.listBranches(repo.id).then((r) => r.data.data),
+    enabled: loadBranches,
+    staleTime: 120_000,
+  });
+
+  const defaultBranch = branchData?.defaultBranch;
+  const otherBranches = (branchData?.branches ?? []).filter((name) => name !== defaultBranch);
+
   const completedReviews = getCompletedReviewsNewestFirst(repo);
   const latestScore = completedReviews[0]?.overall_score;
   const status = repoHealthStatus(repo);
+  const reviewBusy = busyReviewRepoId === repo.id;
+  const actionsDisabled =
+    reviewBusy || disconnectPending || syncAllWebhooksPending;
+
+  const defaultLabel =
+    branchesLoading && loadBranches
+      ? 'Loading branches…'
+      : defaultBranch
+        ? `Default (${defaultBranch})`
+        : 'Default branch';
 
   return (
     <div role="listitem" className="card card-interactive flex flex-col p-5">
@@ -99,30 +127,52 @@ export function ConnectedRepoCard({
         </>
       )}
 
-      <div className="mt-auto flex gap-2 border-t border-desk-border pt-4">
-        <button
-          type="button"
-          title="Review latest commit on default branch"
-          aria-label={`Review latest commit for ${repo.full_name}`}
-          aria-busy={busyReviewRepoId === repo.id}
-          onClick={() => onReviewLatest(repo.id)}
-          disabled={
-            busyReviewRepoId === repo.id || disconnectPending || syncAllWebhooksPending
-          }
-          className="btn-secondary inline-flex min-h-[2.25rem] min-w-0 flex-1 items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium"
-        >
-          {busyReviewRepoId === repo.id ? <Spinner size="sm" /> : <Sparkles size={13} aria-hidden="true" />}
-          <span className="truncate">Review latest</span>
-        </button>
-        <button
-          type="button"
-          aria-label={`Disconnect ${repo.full_name}`}
-          onClick={() => onDisconnect(repo)}
-          disabled={disconnectPending}
-          className="rounded-md border border-transparent p-2 text-desk-muted transition-colors hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-300 disabled:opacity-40"
-        >
-          <Trash2 size={15} />
-        </button>
+      <div className="mt-auto space-y-2 border-t border-desk-border pt-4">
+        <label className="block text-[11px] font-medium text-desk-muted">
+          <span className="mb-1 flex items-center gap-1">
+            <GitBranch size={12} aria-hidden="true" />
+            Branch to review
+          </span>
+          <select
+            value={selectedBranch}
+            onChange={(e) => setSelectedBranch(e.target.value)}
+            onFocus={() => setLoadBranches(true)}
+            disabled={actionsDisabled}
+            className="w-full rounded-md border border-desk-border bg-desk-canvas px-2 py-1.5 font-mono text-[11px] text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 disabled:opacity-50 dark:text-gray-100"
+            aria-label={`Branch to review for ${repo.full_name}`}
+          >
+            <option value="">{defaultLabel}</option>
+            {otherBranches.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <div className="flex gap-2">
+          <button
+            type="button"
+            title="Review latest commit on selected branch"
+            aria-label={`Review latest commit for ${repo.full_name}`}
+            aria-busy={reviewBusy}
+            onClick={() => onReviewLatest(repo.id, selectedBranch || undefined)}
+            disabled={actionsDisabled}
+            className="btn-secondary inline-flex min-h-[2.25rem] min-w-0 flex-1 items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium"
+          >
+            {reviewBusy ? <Spinner size="sm" /> : <Sparkles size={13} aria-hidden="true" />}
+            <span className="truncate">Review latest</span>
+          </button>
+          <button
+            type="button"
+            aria-label={`Disconnect ${repo.full_name}`}
+            onClick={() => onDisconnect(repo)}
+            disabled={disconnectPending}
+            className="rounded-md border border-transparent p-2 text-desk-muted transition-colors hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-300 disabled:opacity-40"
+          >
+            <Trash2 size={15} />
+          </button>
+        </div>
       </div>
     </div>
   );

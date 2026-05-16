@@ -130,10 +130,33 @@ async function syncWebhook(userId, repositoryId) {
   return updated;
 }
 
+async function listRepoBranches(userId, repositoryId) {
+  const { data: repo, error } = await reposRepository.findByIdAndUserId(repositoryId, userId);
+
+  if (error || !repo) throw new AppError('Repository not found', 404);
+
+  const token = await requireGithubToken(userId);
+  const octokit = createOctokit(token);
+  const [owner, repoName] = repo.full_name.split('/');
+
+  const { data: remote } = await octokit.repos.get({ owner, repo: repoName });
+  const { data: branchRows } = await octokit.repos.listBranches({
+    owner,
+    repo: repoName,
+    per_page: 100,
+  });
+
+  return {
+    defaultBranch: remote.default_branch,
+    branches: branchRows.map((b) => b.name),
+  };
+}
+
 module.exports = {
   listConnectedRepos,
   listGithubReposPreview,
   connectRepository,
   disconnectRepository,
   syncWebhook,
+  listRepoBranches,
 };

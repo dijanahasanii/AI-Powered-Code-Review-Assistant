@@ -112,9 +112,9 @@ async function enqueueManualReview({ repositoryId, repo, userId, commitSha, bran
 }
 
 /**
- * @param {{ userId: string, repositoryId: string }} params
+ * @param {{ userId: string, repositoryId: string, branch?: string }} params
  */
-async function enqueueReviewForLatestCommitOnDefaultBranch({ userId, repositoryId }) {
+async function enqueueReviewForLatestCommitOnDefaultBranch({ userId, repositoryId, branch }) {
   const { data: repo, error } = await reposRepository.findByIdAndUserId(repositoryId, userId);
 
   if (error || !repo) throw new AppError('Repository not found', 404);
@@ -130,23 +130,38 @@ async function enqueueReviewForLatestCommitOnDefaultBranch({ userId, repositoryI
 
   const { data: remote } = await octokit.repos.get({ owner, repo: repoName });
   const defaultBranch = remote.default_branch;
+  const targetBranch = String(branch || '').trim() || defaultBranch;
 
-  const { data: commits } = await octokit.repos.listCommits({
-    owner,
-    repo: repoName,
-    sha: defaultBranch,
-    per_page: 1,
-  });
+  let commits;
+  try {
+    ({ data: commits } = await octokit.repos.listCommits({
+      owner,
+      repo: repoName,
+      sha: targetBranch,
+      per_page: 1,
+    }));
+  } catch (e) {
+    const msg = String(e?.message || '');
+    if (msg.includes('Not Found') || e?.status === 404) {
+      throw new AppError(`Branch "${targetBranch}" was not found on GitHub`, 404);
+    }
+    throw e;
+  }
 
   const head = commits[0];
-  if (!head?.sha) throw new AppError('Could not resolve latest commit from GitHub', 502);
+  if (!head?.sha) {
+    throw new AppError(
+      `Could not resolve latest commit on branch "${targetBranch}" (empty branch or no access)`,
+      502
+    );
+  }
 
   return enqueueManualReview({
     repositoryId,
     repo,
     userId,
     commitSha: head.sha,
-    branch: defaultBranch,
+    branch: targetBranch,
   });
 }
 

@@ -207,6 +207,8 @@ export default function ReportDetailPage() {
             isLoading={markdownQuery.isPending}
             isError={markdownQuery.isError}
             reportPath={report.report_path}
+            repositoryName={report.repository_name}
+            reportGeneratedAt={report.created_at}
           />
           <ReportRemediationLog log={report.remediation_log} status={report.remediation_status} />
         </div>

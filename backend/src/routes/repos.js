@@ -8,6 +8,7 @@ const {
   connectRepo,
   disconnectRepo,
   syncRepoWebhook,
+  listBranches,
 } = require('../controllers/reposController');
 
 function assertValid(req, res, next) {
@@ -32,6 +33,7 @@ router.use(authenticate);
 router.get('/', listRepos);
 router.get('/github', listGithubRepos);
 router.post('/', validateConnect, connectRepo);
+router.get('/:id/branches', param('id').isUUID(), assertValid, listBranches);
 router.post('/:id/sync-webhook', param('id').isUUID(), assertValid, syncRepoWebhook);
 router.delete('/:id', param('id').isUUID(), assertValid, disconnectRepo);
 

@@ -4,6 +4,7 @@ const {
   connectRepository,
   disconnectRepository,
   syncWebhook,
+  listRepoBranches,
 } = require('../services/reposService');
 
 /**
@@ -73,4 +74,25 @@ const syncRepoWebhook = async (req, res, next) => {
   }
 };
 
-module.exports = { listRepos, listGithubRepos, connectRepo, disconnectRepo, syncRepoWebhook };
+/**
+ * GET /api/repos/:id/branches
+ * Branch names for manual review picker (first 100 from GitHub).
+ */
+const listBranches = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const data = await listRepoBranches(req.user.id, id);
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = {
+  listRepos,
+  listGithubRepos,
+  connectRepo,
+  disconnectRepo,
+  syncRepoWebhook,
+  listBranches,
+};

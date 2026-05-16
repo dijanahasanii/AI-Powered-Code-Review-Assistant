@@ -93,15 +93,16 @@ const triggerReview = async (req, res, next) => {
 
 /**
  * POST /api/reviews/trigger/latest
- * Queue a review for the latest commit on the repo default branch (GitHub API)
+ * Queue a review for the latest commit on the default or selected branch (GitHub API)
  */
 const triggerLatestReview = async (req, res, next) => {
   try {
-    const { repositoryId } = req.body;
+    const { repositoryId, branch } = req.body;
 
     const result = await enqueueReviewForLatestCommitOnDefaultBranch({
       repositoryId,
       userId: req.user.id,
+      branch,
     });
 
     res.status(202).json({

@@ -53,6 +53,7 @@ export const authApi = {
 export const reposApi = {
   list: () => api.get('/api/repos'),
   listGithub: () => api.get('/api/repos/github'),
+  listBranches: (id) => api.get(`/api/repos/${id}/branches`),
   connect: (data) => api.post('/api/repos', data),
   disconnect: (id) => api.delete(`/api/repos/${id}`),
   syncWebhook: (id) => api.post(`/api/repos/${id}/sync-webhook`),
@@ -63,7 +64,11 @@ export const reviewsApi = {
   getOne: (id) => api.get(`/api/reviews/${id}`),
   getStats: () => api.get('/api/reviews/stats'),
   trigger: (data) => api.post('/api/reviews/trigger', data),
-  triggerLatest: (repositoryId) => api.post('/api/reviews/trigger/latest', { repositoryId }),
+  triggerLatest: (repositoryId, branch) =>
+    api.post('/api/reviews/trigger/latest', {
+      repositoryId,
+      ...(branch ? { branch } : {}),
+    }),
   retryPending: (reviewId) => api.post(`/api/reviews/retry/${reviewId}`),
 };
 

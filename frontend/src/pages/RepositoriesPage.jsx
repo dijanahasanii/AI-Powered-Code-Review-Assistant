@@ -161,16 +161,17 @@ export default function RepositoriesPage() {
   });
 
   const triggerLatestMutation = useMutation({
-    mutationFn: (repositoryId) => {
+    mutationFn: ({ repositoryId, branch }) => {
       if (repositoryId == null) return Promise.reject(new Error('Missing repository'));
-      return reviewsApi.triggerLatest(repositoryId);
+      return reviewsApi.triggerLatest(repositoryId, branch);
     },
-    onSuccess: (res) => {
+    onSuccess: (res, { branch }) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.repos });
       queryClient.invalidateQueries({ queryKey: queryKeys.reviewsAll });
       queryClient.invalidateQueries({ queryKey: queryKeys.stats });
 
-      toast.success('Review started', 'Queued on the default branch — open Reviews to watch it run.');
+      const branchNote = branch ? `branch ${branch}` : 'the default branch';
+      toast.success('Review started', `Queued on ${branchNote} — open Reviews to watch it run.`);
       const meta = res?.data?.meta || {};
       if (meta.duplicatePending) {
         setReviewHint({
@@ -186,7 +187,7 @@ export default function RepositoriesPage() {
       } else {
         setReviewHint({
           tone: 'success',
-          text: 'Queued on the repository’s default branch. Watch the Reviews list until status shows completed.',
+          text: `Queued on ${branch ? `branch ${branch}` : 'the default branch'}. Watch the Reviews list until status shows completed.`,
         });
       }
     },
@@ -202,7 +203,9 @@ export default function RepositoriesPage() {
     [githubRepos, search]
   );
 
-  const busyReviewRepoId = triggerLatestMutation.isPending ? triggerLatestMutation.variables : null;
+  const busyReviewRepoId = triggerLatestMutation.isPending
+    ? triggerLatestMutation.variables?.repositoryId
+    : null;
   const busySyncWebhookId = syncWebhookMutation.isPending ? syncWebhookMutation.variables : null;
 
   const reposLoadFailure = reposError ? describeApiFailure(reposError, { resourceLabel: 'connected repositories' }) : null;
@@ -219,7 +222,7 @@ export default function RepositoriesPage() {
 
       <PageHeader
         title="Repositories"
-        description="Pushes queue automatically whenever the webhook is healthy. Trigger “Review latest” for immediate feedback on your default branch without waiting for CI."
+        description="Pushes queue automatically whenever the webhook is healthy. Use “Review latest” to analyze the latest commit on the default or a chosen branch."
         hint={
           user?.username
             ? `Repos and webhooks belong to GitHub OAuth for @${user.username}. Org repos need admin rights to install hooks.`
@@ -281,7 +284,7 @@ export default function RepositoriesPage() {
           busySyncWebhookId={busySyncWebhookId}
           syncAllWebhooksPending={syncAllWebhooksMutation.isPending}
           disconnectPending={disconnectMutation.isPending}
-          onReviewLatest={(id) => triggerLatestMutation.mutate(id)}
+          onReviewLatest={(id, branch) => triggerLatestMutation.mutate({ repositoryId: id, branch })}
           onSyncWebhook={(id) => syncWebhookMutation.mutate(id)}
           onDisconnect={(repo) => setConfirmRepo(repo)}
         />

@@ -41,7 +41,7 @@ export default function ReviewsPage() {
   const emptyDescription =
     status !== 'all'
       ? `No ${status} reviews. Try a different filter or trigger a manual run from Repositories.`
-      : 'Push code to a connected repository or use “Review latest” on Repositories for the default branch.';
+      : 'Push code to a connected repository or use “Review latest” on Repositories to pick a branch.';
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">

@@ -22,7 +22,10 @@ router.post('/trigger', [
   body('commitSha').isLength({ min: 7, max: 40 }),
 ], triggerReview);
 
-router.post('/trigger/latest', [body('repositoryId').isUUID()], triggerLatestReview);
+router.post('/trigger/latest', [
+  body('repositoryId').isUUID(),
+  body('branch').optional().isString().trim().isLength({ min: 1, max: 255 }),
+], triggerLatestReview);
 
 router.get('/:id', getReview);
 
