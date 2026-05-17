@@ -78,13 +78,34 @@ describe('Auth middleware', () => {
     expect(res.status).toBe(401);
   });
 
-  it('accepts valid JWT token', async () => {
+  it('accepts valid JWT token via Authorization header', async () => {
     const token = makeToken();
     const res = await request(app)
       .get('/api/auth/me')
       .set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
+  });
+
+  it('accepts valid JWT from httpOnly session cookie', async () => {
+    const token = makeToken();
+    const res = await request(app).get('/api/auth/me').set('Cookie', [`acr_session=${token}`]);
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+  });
+});
+
+describe('Auth logout', () => {
+  it('POST /api/auth/logout clears session cookie', async () => {
+    const token = makeToken();
+    const res = await request(app)
+      .post('/api/auth/logout')
+      .set('Cookie', [`acr_session=${token}`]);
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    const setCookie = res.headers['set-cookie'];
+    const joined = Array.isArray(setCookie) ? setCookie.join(';') : String(setCookie || '');
+    expect(joined).toMatch(/acr_session=/i);
   });
 });
 

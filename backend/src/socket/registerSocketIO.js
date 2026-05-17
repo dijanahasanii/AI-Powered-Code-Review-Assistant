@@ -11,7 +11,7 @@ function registerSocketIO(io) {
   io.use(async (socket, next) => {
     try {
       const raw = socket.handshake.auth && socket.handshake.auth.token;
-      const user = await getUserFromSocketToken(raw);
+      const user = await getUserFromSocketToken(raw, socket.handshake.headers.cookie);
 
       if (!user) {
         return next(new Error('Authentication required'));

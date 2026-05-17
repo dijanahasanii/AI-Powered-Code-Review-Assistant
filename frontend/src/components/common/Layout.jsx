@@ -18,6 +18,7 @@ import { useSocket } from '../../context/SocketContext';
 import { useUiPreferences } from '../../context/UiPreferencesContext';
 import { Avatar } from './UI';
 import { BrowserOfflineBar } from './BrowserOfflineBar';
+import { ReviewSocketCacheSync } from './ReviewSocketCacheSync';
 
 const navPrimary = [
   { to: '/dashboard', icon: FlaskConical, label: 'Analysis', end: true },
@@ -303,6 +304,8 @@ export default function Layout() {
         <BrowserOfflineBar />
 
         <RealtimeUpdatesBanner />
+
+        <ReviewSocketCacheSync />
 
         <main
           data-density={density}

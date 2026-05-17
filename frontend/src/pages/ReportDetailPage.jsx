@@ -12,6 +12,7 @@ import { ReportDetailHeader } from '../features/reports/components/ReportDetailH
 import { ReportSummaryCard } from '../features/reports/components/ReportSummaryCard';
 import { ReportMarkdownAudit } from '../features/reports/components/ReportMarkdownAudit';
 import { ReportRemediationLog } from '../features/reports/components/ReportRemediationLog';
+import { PostRemediationUpdateBanner } from '../features/reports/components/PostRemediationUpdateBanner';
 import { AnalysisFindingsPanel } from '../features/reviews/components/AnalysisFindingsPanel';
 import { SEVERITY_ORDER, bucketCategory } from '../features/reviews/analysisConstants';
 
@@ -33,9 +34,12 @@ export default function ReportDetailPage() {
     staleTime: 0,
     refetchOnWindowFocus: true,
     refetchInterval: (query) => {
-      const status = query.state.data?.remediation_status;
+      const data = query.state.data;
+      const status = data?.remediation_status;
+      const followStatus = data?.followUp?.status;
       if (remediationWatch) return 2000;
       if (status && ACTIVE_REMEDIATION_STATUSES.has(status) && status !== 'pending') return 3000;
+      if (status === 'pushed' && ['pending', 'processing'].includes(followStatus)) return 3000;
       return false;
     },
   });
@@ -63,10 +67,27 @@ export default function ReportDetailPage() {
     enabled: Boolean(id) && Boolean(report),
   });
 
+  const rescanMutation = useMutation({
+    mutationFn: () => reportsApi.rescanAfterFix(id),
+    onSuccess: async () => {
+      toast.success('Re-scan started', 'We are analyzing your fixed code on GitHub.');
+      await queryClient.invalidateQueries({ queryKey: queryKeys.reportDetail(id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.reviewsAll });
+      queryClient.invalidateQueries({ queryKey: queryKeys.reportsAll });
+    },
+    onError: (err) => {
+      const { title, detail } = describeApiFailure(err, { resourceLabel: 're-scan' });
+      toast.error(title, detail);
+    },
+  });
+
   const confirmMutation = useMutation({
     mutationFn: () => reportsApi.confirmRemediation(id),
     onSuccess: async () => {
-      toast.success('Remediation queued', 'Fixes will run after validation on the analyzed branch.');
+      toast.success(
+        'Remediation queued',
+        'Fixes will run after validation. If GitHub is already clean, we only refresh the report.'
+      );
       setConfirmOpen(false);
       setRemediationWatch(true);
       await queryClient.invalidateQueries({ queryKey: queryKeys.reportDetail(id) });
@@ -105,6 +126,16 @@ export default function ReportDetailPage() {
     report.issue_count > 0 &&
     !['pushed', 'running', 'validating'].includes(report.remediation_status);
 
+  const remediationFailureDetail = useMemo(() => {
+    const log = report?.remediation_log?.trim();
+    if (!log) return null;
+    const lines = log.split('\n').map((l) => l.trim()).filter(Boolean);
+    const errLine =
+      [...lines].reverse().find((l) => /Remediation error:|Validation failed|Push failed|No automatic fixes/i.test(l)) ||
+      lines[lines.length - 1];
+    return errLine?.replace(/^\[[^\]]+\]\s*/, '') || null;
+  }, [report?.remediation_log]);
+
   const summary = reviewQuery.data?.summary;
   const overallScore = reviewQuery.data?.overall_score;
 
@@ -115,6 +146,8 @@ export default function ReportDetailPage() {
         `Issues in report: ${report.issue_count}`,
         '',
         'Files will be modified, validated (lint/build/test when available), committed, and pushed to the same branch. This cannot be undone automatically.',
+        '',
+        'Apply fixes runs several automatic passes (console, secrets, SQL, blocking fs, etc.). Complex cases may still need manual edits.',
       ].join('\n')
     : '';
 
@@ -156,6 +189,21 @@ export default function ReportDetailPage() {
         onApplyFixes={() => setConfirmOpen(true)}
       />
 
+      {report.remediation_status === 'pushed' && (
+        <PostRemediationUpdateBanner
+          followUp={report.followUp}
+          rescanPending={rescanMutation.isPending}
+          onRescan={() => rescanMutation.mutate()}
+        />
+      )}
+
+      {report.remediation_status === 'pushed' && (
+        <p className="mb-6 text-sm text-desk-muted">
+          The score and findings below are from <strong className="font-medium text-gray-800 dark:text-gray-200">before</strong>{' '}
+          fixes were pushed. Use the banner above for updated results.
+        </p>
+      )}
+
       {report.remediation_status === 'failed' && (
         <div
           className="mb-8 rounded-xl border border-red-500/30 bg-red-500/[0.08] px-4 py-3 sm:px-5"
@@ -163,8 +211,13 @@ export default function ReportDetailPage() {
         >
           <p className="text-sm font-semibold text-red-200">Remediation did not push to GitHub</p>
           <p className="mt-1 text-sm text-red-200/80">
-            Expand the remediation log below for details, then try Apply fixes again after fixing the underlying issue.
+            Expand the remediation log below for the full trace, then try Apply fixes again after fixing the underlying issue.
           </p>
+          {remediationFailureDetail && (
+            <p className="mt-2 rounded-lg border border-red-500/20 bg-black/20 px-3 py-2 font-mono text-xs text-red-100/95">
+              {remediationFailureDetail}
+            </p>
+          )}
           {report.remediation_log && (
             <a
               href="#remediation-log"

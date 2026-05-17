@@ -101,6 +101,7 @@ export default function RepositoriesPage() {
 
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.reviewsAll, refetchType: 'none' }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.reportsAll }),
         queryClient.invalidateQueries({ queryKey: queryKeys.stats, refetchType: 'none' }),
         queryClient.invalidateQueries({ queryKey: ['review'], refetchType: 'none' }),
       ]);
@@ -168,6 +169,7 @@ export default function RepositoriesPage() {
     onSuccess: (res, { branch }) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.repos });
       queryClient.invalidateQueries({ queryKey: queryKeys.reviewsAll });
+      queryClient.invalidateQueries({ queryKey: queryKeys.reportsAll });
       queryClient.invalidateQueries({ queryKey: queryKeys.stats });
 
       const branchNote = branch ? `branch ${branch}` : 'the default branch';
@@ -294,7 +296,7 @@ export default function RepositoriesPage() {
         open={!!confirmRepo}
         danger
         title="Disconnect repository?"
-        message={`This removes "${confirmRepo?.full_name}", deletes its webhook, and stops automated reviews.`}
+        message={`This removes "${confirmRepo?.full_name}", deletes its webhook, reviews, and AI reports, and stops automated analysis.`}
         confirmLabel="Disconnect"
         onConfirm={() => {
           if (confirmRepo?.id == null) return;

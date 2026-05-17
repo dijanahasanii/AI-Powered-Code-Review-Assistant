@@ -111,10 +111,13 @@ export default function DashboardPage() {
   });
 
   useEffect(() => {
-    const unsub = onReviewUpdate(() => {
+    const unsub = onReviewUpdate((update) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.stats });
       queryClient.invalidateQueries({ queryKey: queryKeys.reviewsAll });
       queryClient.invalidateQueries({ queryKey: queryKeys.repos });
+      if (update?.status === 'completed' || update?.status === 'failed') {
+        queryClient.invalidateQueries({ queryKey: queryKeys.reportsAll });
+      }
     });
     return unsub;
   }, [onReviewUpdate, queryClient]);

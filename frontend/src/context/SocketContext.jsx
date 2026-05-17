@@ -42,7 +42,7 @@ export const SocketProvider = ({ children }) => {
     }
 
     const socket = io(getPublicSocketBaseUrl(), {
-      auth: { token: localStorage.getItem('token') },
+      withCredentials: true,
       transports: ['polling', 'websocket'],
       reconnection: true,
       reconnectionAttempts: Infinity,

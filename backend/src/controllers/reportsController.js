@@ -1,8 +1,19 @@
 const { AppError } = require('../middleware/errorHandler');
 const { logger } = require('../utils/logger');
 const reportsRepository = require('../repositories/reportsRepository');
-const { readReportMarkdown } = require('../services/reportGeneratorService');
+const {
+  readReportMarkdown,
+  ensureMissingReportsForUser,
+} = require('../services/reportGeneratorService');
 const { enqueueRemediationJob } = require('../services/remediationQueue');
+const {
+  buildFollowUpForReport,
+  queueReanalysisAfterRemediationPush,
+} = require('../services/postRemediationReview');
+
+const appendLogLine = (parts, line) => {
+  parts.push(`[${new Date().toISOString()}] ${line}`);
+};
 
 const isMissingReportsTable = (error) =>
   error?.code === 'PGRST205' ||
@@ -20,6 +31,12 @@ const listReports = async (req, res, next) => {
     const { page = 1, limit = 20 } = req.query;
     const from = (Number(page) - 1) * Number(limit);
     const to = from + Number(limit) - 1;
+
+    try {
+      await ensureMissingReportsForUser(req.user.id);
+    } catch (backfillErr) {
+      logger.warn(`listReports backfill skipped: ${backfillErr.message}`);
+    }
 
     const { data, error, count } = await reportsRepository.listReportsForUser({
       userId: req.user.id,
@@ -69,8 +86,15 @@ const getReport = async (req, res, next) => {
       throw new AppError('Forbidden', 403);
     }
 
+    let followUp = null;
+    try {
+      followUp = await buildFollowUpForReport(report);
+    } catch (followErr) {
+      logger.warn(`buildFollowUpForReport: ${followErr.message}`);
+    }
+
     res.set('Cache-Control', 'no-store');
-    res.json({ success: true, data: report });
+    res.json({ success: true, data: { ...report, followUp } });
   } catch (err) {
     next(err);
   }
@@ -144,9 +168,49 @@ const confirmRemediation = async (req, res, next) => {
   }
 };
 
+/**
+ * POST /api/reports/:id/rescan-after-fix
+ * Queue analysis on the pushed fix commit (for reports remediated before auto re-scan existed).
+ */
+const rescanAfterFix = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { data: report, error } = await reportsRepository.getReportWithRepo(id);
+
+    if (error || !report) throw new AppError('Report not found', 404);
+    if (report.repositories.user_id !== req.user.id) throw new AppError('Forbidden', 403);
+    if (report.remediation_status !== 'pushed' || !report.push_commit_sha) {
+      throw new AppError('This report has no pushed remediation commit to re-scan', 400);
+    }
+
+    const logParts = [];
+    await queueReanalysisAfterRemediationPush({
+      reportId: id,
+      repositoryId: report.repository_id,
+      userId: req.user.id,
+      repoFullName: report.repositories.full_name,
+      pushCommitSha: report.push_commit_sha,
+      branch: report.analyzed_branch,
+      logParts,
+      appendLog: appendLogLine,
+    });
+
+    const followUp = await buildFollowUpForReport(report);
+
+    res.status(202).json({
+      success: true,
+      message: 'Re-scan queued for the commit with your fixes.',
+      data: { followUp },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   listReports,
   getReport,
   getReportMarkdown,
   confirmRemediation,
+  rescanAfterFix,
 };

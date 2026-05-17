@@ -22,12 +22,17 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    strictPort: true,
     /** Open app root so the landing page loads; avoiding a restored `/dashboard` tab. */
     open: '/',
     proxy: {
-      // Proxy API calls to backend during development
       '/api': {
         target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+      '/socket.io': {
+        target: 'http://localhost:3001',
+        ws: true,
         changeOrigin: true,
       },
     },

@@ -54,4 +54,10 @@ async function enqueueAnalyzeJob(data) {
   });
 }
 
-module.exports = { reviewQueue, enqueueAnalyzeJob };
+async function closeReviewQueue() {
+  if (reviewQueue) {
+    await reviewQueue.close();
+  }
+}
+
+module.exports = { reviewQueue, enqueueAnalyzeJob, closeReviewQueue };

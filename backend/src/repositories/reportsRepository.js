@@ -76,6 +76,17 @@ async function updateReportById(reportId, patch) {
     .eq('id', reportId);
 }
 
+async function listReportPathsByRepositoryId(repositoryId) {
+  return supabase
+    .from('analysis_reports')
+    .select('id, report_path')
+    .eq('repository_id', repositoryId);
+}
+
+async function deleteByRepositoryId(repositoryId) {
+  return supabase.from('analysis_reports').delete().eq('repository_id', repositoryId);
+}
+
 module.exports = {
   upsertReport,
   findReportByReviewId,
@@ -83,4 +94,6 @@ module.exports = {
   listReportsForUser,
   getReportWithRepo,
   updateReportById,
+  listReportPathsByRepositoryId,
+  deleteByRepositoryId,
 };

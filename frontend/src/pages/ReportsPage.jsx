@@ -17,6 +17,7 @@ export default function ReportsPage() {
   const { data, isPending, isError, error, refetch } = useQuery({
     queryKey: queryKeys.reportsList({ page, limit: LIMIT }),
     queryFn: () => reportsApi.list({ page, limit: LIMIT }).then((r) => r.data),
+    refetchOnMount: 'always',
   });
 
   const reports = data?.data ?? [];

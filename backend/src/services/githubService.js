@@ -45,17 +45,9 @@ const withGithubRetry = async (label, fn, maxAttempts = 3) => {
   throw last;
 };
 
-const loadUserAccessToken = async (userId) => {
-  const { data: user } = await supabase
-    .from('users')
-    .select('access_token')
-    .eq('id', userId)
-    .single();
+const { getGithubAccessTokenForUser } = require('./userTokenService');
 
-  const token = user?.access_token;
-  if (!token || typeof token !== 'string') return null;
-  return token;
-};
+const loadUserAccessToken = async (userId) => getGithubAccessTokenForUser(userId);
 
 /**
  * Fetch the diff for a specific commit from GitHub
@@ -385,9 +377,25 @@ const isBinaryPath = (filePath) => {
   return binaryExtensions.some((ext) => filePath.toLowerCase().endsWith(ext));
 };
 
+/**
+ * @param {string} repoFullName - owner/repo
+ * @param {string} userId
+ * @returns {Promise<string>}
+ */
+const fetchRepoDefaultBranch = async (repoFullName, userId) => {
+  const { owner, repo } = parseRepoFullName(repoFullName);
+  const token = await loadUserAccessToken(userId);
+  if (!token) throw new Error('GitHub access token missing or invalid');
+  const octokit = new Octokit({ auth: token });
+  const { data } = await withGithubRetry('repos.get', () => octokit.repos.get({ owner, repo }));
+  return data.default_branch || 'main';
+};
+
 module.exports = {
   fetchCommitDiff,
   fetchRepoSourceFilesAtCommit,
   postPRComments,
   loadUserAccessToken,
+  fetchRepoDefaultBranch,
+  parseRepoFullName,
 };

@@ -2,16 +2,18 @@
 
 const jwt = require('jsonwebtoken');
 const { supabase } = require('../config/database');
+const { readAuthCookieHeader } = require('./authCookie');
 
 /**
- * Resolve a Supabase user row from a raw JWT string (same semantics as HTTP Bearer for /api/*).
- * Socket clients send the token without "Bearer " prefix in handshake.auth.token.
+ * Resolve a Supabase user row from a session JWT (httpOnly cookie or legacy handshake.auth.token).
  *
  * @returns {Promise<object|null>} user row or null if missing/invalid/not found
  */
-async function getUserFromSocketToken(token) {
-  if (token == null || typeof token !== 'string') return null;
-  const trimmed = token.trim();
+async function getUserFromSocketToken(token, cookieHeader) {
+  let trimmed = token != null && typeof token === 'string' ? token.trim() : '';
+  if (!trimmed && cookieHeader) {
+    trimmed = readAuthCookieHeader(cookieHeader) || '';
+  }
   if (!trimmed) return null;
 
   const secret = process.env.JWT_SECRET;

@@ -14,12 +14,6 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     let cancelled = false;
-    const token = localStorage.getItem('token');
-
-    if (!token) {
-      setLoading(false);
-      return undefined;
-    }
 
     authApi
       .getMe()
@@ -27,22 +21,10 @@ export const AuthProvider = ({ children }) => {
         if (cancelled) return;
         const next = res?.data?.user;
         if (isUsableSessionUser(next)) setUser(next);
-        else {
-          try {
-            localStorage.removeItem('token');
-          } catch {
-            /* ignore */
-          }
-          setUser(null);
-        }
+        else setUser(null);
       })
       .catch(() => {
         if (cancelled) return;
-        try {
-          localStorage.removeItem('token');
-        } catch {
-          /* ignore */
-        }
         setUser(null);
       })
       .finally(() => {
@@ -54,13 +36,14 @@ export const AuthProvider = ({ children }) => {
     };
   }, []);
 
-  const login = useCallback((token, userData) => {
-    localStorage.setItem('token', token);
+  const login = useCallback((userData) => {
     setUser(isUsableSessionUser(userData) ? userData : null);
   }, []);
 
   const logout = useCallback(() => {
-    localStorage.removeItem('token');
+    authApi.logout().catch(() => {
+      /* cookie clear is best-effort if API is down */
+    });
     setUser(null);
   }, []);
 

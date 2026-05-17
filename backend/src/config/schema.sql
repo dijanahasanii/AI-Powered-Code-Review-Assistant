@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS users (
   username      VARCHAR(255) NOT NULL,
   email         VARCHAR(255),
   avatar_url    TEXT,
-  access_token  TEXT,          
+  access_token  TEXT,  -- AES-256-GCM ciphertext (v1:/v2:) via TOKEN_ENCRYPTION_KEY_CURRENT; legacy plaintext until re-login          
   created_at    TIMESTAMPTZ DEFAULT NOW(),
   updated_at    TIMESTAMPTZ DEFAULT NOW()
 );
@@ -94,6 +94,7 @@ CREATE TABLE IF NOT EXISTS analysis_reports (
   remediation_log     TEXT,
   push_commit_sha     VARCHAR(40),
   pushed_at           TIMESTAMPTZ,
+  follow_up_review_id UUID REFERENCES code_reviews(id) ON DELETE SET NULL,
   created_at          TIMESTAMPTZ DEFAULT NOW(),
   updated_at          TIMESTAMPTZ DEFAULT NOW()
 );

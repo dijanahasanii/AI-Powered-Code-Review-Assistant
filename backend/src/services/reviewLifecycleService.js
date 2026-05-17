@@ -8,7 +8,7 @@ const { createOctokit } = require('./githubWebhookService');
 const { logger } = require('../utils/logger');
 const reviewsRepository = require('../repositories/reviewsRepository');
 const reposRepository = require('../repositories/reposRepository');
-const usersRepository = require('../repositories/usersRepository');
+const { getGithubAccessTokenForUser } = require('./userTokenService');
 
 const throwIfDbError = (ctx, error) => {
   if (error) {
@@ -83,14 +83,21 @@ async function resolveExistingManualReview(repositoryId, commitSha, repo, userId
  * @param {{ repositoryId: string, repo: object, userId: string, commitSha: string, branch?: string }} params
  * @returns {Promise<{ review: object, reanalysis: boolean, duplicatePending: boolean }>}
  */
-async function enqueueManualReview({ repositoryId, repo, userId, commitSha, branch }) {
+async function enqueueManualReview({
+  repositoryId,
+  repo,
+  userId,
+  commitSha,
+  branch,
+  triggeredBy = 'manual',
+}) {
   const branchLabel = branch || 'main';
 
   const { data: review, error: insertError } = await reviewsRepository.insertManualReviewRow({
     repositoryId,
     commitSha,
     branch: branchLabel,
-    triggeredBy: 'manual',
+    triggeredBy,
   });
 
   if (!insertError) {
@@ -119,13 +126,13 @@ async function enqueueReviewForLatestCommitOnDefaultBranch({ userId, repositoryI
 
   if (error || !repo) throw new AppError('Repository not found', 404);
 
-  const { data: userRecord } = await usersRepository.getAccessToken(userId);
+  const githubToken = await getGithubAccessTokenForUser(userId);
 
-  if (!userRecord?.access_token) {
+  if (!githubToken) {
     throw new AppError('GitHub token unavailable — sign out and sign in again', 400);
   }
 
-  const octokit = createOctokit(userRecord.access_token);
+  const octokit = createOctokit(githubToken);
   const [owner, repoName] = repo.full_name.split('/');
 
   const { data: remote } = await octokit.repos.get({ owner, repo: repoName });

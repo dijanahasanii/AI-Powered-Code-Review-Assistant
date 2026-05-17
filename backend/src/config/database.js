@@ -1,3 +1,7 @@
+/**
+ * Backend-only Supabase client (service role). Never import this module from the frontend or
+ * expose SUPABASE_SERVICE_KEY via VITE_* / NEXT_PUBLIC_* env vars — it bypasses Row Level Security.
+ */
 const { createClient } = require('@supabase/supabase-js');
 const { logger } = require('../utils/logger');
 

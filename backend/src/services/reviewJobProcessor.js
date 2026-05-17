@@ -2,6 +2,7 @@ const { supabase } = require('../config/database');
 const { analyzeCode } = require('./openaiService');
 const { fetchCommitDiff, postPRComments } = require('./githubService');
 const { generateAndPersistReport } = require('./reportGeneratorService');
+const { formatMatchedRuleForStorage } = require('../lib/issueRuleSlug');
 const { logger } = require('../utils/logger');
 
 let ioSingleton = null;
@@ -212,7 +213,7 @@ const finalizeReview = async (reviewId, analysis, fileStats) => {
           description: issue.description,
           suggestion: issue.suggestion,
           code_snippet: issue.codeSnippet ?? null,
-          matched_rule: issue.matchedRule ?? null,
+          matched_rule: formatMatchedRuleForStorage(issue),
         }))
       );
       throwIfDbError('finalizeReview(issues)', insErr);

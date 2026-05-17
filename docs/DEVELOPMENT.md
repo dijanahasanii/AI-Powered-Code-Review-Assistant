@@ -81,4 +81,4 @@ GitHub Actions uses Node **20** and `npm ci` in `frontend/` and `backend/`. Matc
 
 ## 6. Security checklist (short)
 
-See [SECURITY.md](../SECURITY.md). Never commit `.env` files; never expose `SUPABASE_SERVICE_KEY` or `GITHUB_CLIENT_SECRET` to the frontend build except `VITE_GITHUB_CLIENT_ID` (public OAuth client id).
+See [SECURITY.md](../SECURITY.md). Never commit `.env` files; never expose `SUPABASE_SERVICE_KEY` or `GITHUB_CLIENT_SECRET` to the frontend (no `VITE_SUPABASE_SERVICE_KEY`). Optional public OAuth id: `VITE_GITHUB_CLIENT_ID`. Set `TOKEN_ENCRYPTION_KEY_CURRENT` in `backend/.env`.

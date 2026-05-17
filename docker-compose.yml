@@ -3,7 +3,8 @@
 # The app persists data through Supabase (PostgREST), not a bundled Postgres container.
 # Create backend/.env and frontend/.env from *.env.example before first run, or rely on
 # optional env_file (Docker Compose v2.24+). Minimum for backend: SUPABASE_URL,
-# SUPABASE_SERVICE_KEY, JWT_SECRET (>= 16 chars), GITHUB_* and BACKEND_URL for OAuth/webhooks.
+# SUPABASE_SERVICE_KEY, JWT_SECRET (>= 16 chars), TOKEN_ENCRYPTION_KEY_CURRENT (64 hex),
+# GITHUB_* and BACKEND_URL for OAuth/webhooks. QUEUE_DRIVER=redis is set below for Bull.
 #
 # https://docs.docker.com/compose/compose-file/05-services/#env_file
 

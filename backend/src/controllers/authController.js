@@ -10,6 +10,8 @@ const {
   allFrontendBaseStrings,
   isDevelopmentRelaxedOrigin,
 } = require('../utils/frontendOrigins');
+const { encryptGithubTokenForStorage } = require('../services/userTokenService');
+const { setAuthCookie, clearAuthCookie } = require('../utils/authCookie');
 
 function githubOAuthRedirectUri() {
   return `${primaryFrontendBase(process.env.FRONTEND_URL)}/auth/callback`;
@@ -167,13 +169,21 @@ const githubCallback = async (req, res, next) => {
 
     const githubId = String(githubUser.id);
 
+    let encryptedGithubToken;
+    try {
+      encryptedGithubToken = encryptGithubTokenForStorage(githubToken);
+    } catch (encErr) {
+      logger.error('GitHub token encryption failed', { message: encErr.message });
+      throw new AppError('Server misconfiguration: token encryption unavailable', 500);
+    }
+
     const { error: upsertError } = await supabase.from('users').upsert(
       {
         github_id: githubId,
         username: githubUser.login || '',
         email: githubUser.email ?? null,
         avatar_url: githubUser.avatar_url ?? null,
-        access_token: githubToken,
+        access_token: encryptedGithubToken,
         updated_at: new Date().toISOString(),
       },
       { onConflict: 'github_id' }
@@ -208,14 +218,14 @@ const githubCallback = async (req, res, next) => {
       throw new AppError('Database error — could not retrieve user after login', 500);
     }
 
-    // Issue our own JWT
     const appToken = jwt.sign({ userId: user.id }, process.env.JWT_SECRET, {
       expiresIn: process.env.JWT_EXPIRES_IN || '7d',
     });
 
+    setAuthCookie(res, appToken);
+
     res.json({
       success: true,
-      token: appToken,
       user: {
         id: user.id,
         username: user.username,
@@ -235,4 +245,12 @@ const getMe = async (req, res) => {
   res.json({ success: true, user: req.user });
 };
 
-module.exports = { githubRedirect, githubCallback, getMe };
+/**
+ * POST /api/auth/logout — clear session cookie
+ */
+const logout = (_req, res) => {
+  clearAuthCookie(res);
+  res.json({ success: true });
+};
+
+module.exports = { githubRedirect, githubCallback, getMe, logout };

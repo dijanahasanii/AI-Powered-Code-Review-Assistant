@@ -32,6 +32,20 @@ describe('getUserFromSocketToken', () => {
     expect(await getUserFromSocketToken(token)).toBeNull();
   });
 
+  it('reads JWT from cookie header when handshake token omitted', async () => {
+    const row = {
+      id: 'user-uuid-2',
+      github_id: 2,
+      username: 'bob',
+      email: 'b@ex.com',
+      avatar_url: null,
+    };
+    const token = jwt.sign({ userId: row.id }, process.env.JWT_SECRET, { expiresIn: '1h' });
+    supabase.single.mockResolvedValueOnce({ data: row, error: null });
+    const out = await getUserFromSocketToken(null, `acr_session=${token}`);
+    expect(out).toEqual(row);
+  });
+
   it('returns user row for valid JWT and existing user', async () => {
     const row = {
       id: 'user-uuid-1',

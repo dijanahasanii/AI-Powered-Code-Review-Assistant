@@ -23,8 +23,8 @@ Scope: GitHub-integrated code review assistant (Express API, React SPA, Supabase
 |---|---|
 | **Description** | User GitHub `access_token` exposed in transit, logs, backups, or browser. |
 | **Impact** | Full GitHub API access as the victim user until revocation. |
-| **Mitigation (existing)** | HTTPS in production; tokens stored server-side in Supabase (`authController` upsert); app uses JWT for dashboard session (`backend/src/middleware/auth.js`). README “Risks” section documents plaintext-at-rest limitation. |
-| **Residual risk** | **Database column not encrypted at application layer** — anyone with DB or service-role key can read tokens. |
+| **Mitigation (existing)** | HTTPS in production; tokens encrypted at rest (`TOKEN_ENCRYPTION_KEY_CURRENT` / `PREVIOUS`, `v2:` ciphertext in `backend/src/utils/tokenCrypto.js`); decrypted only in memory for GitHub API calls; automatic re-encrypt to CURRENT after PREVIOUS decrypt. |
+| **Residual risk** | Anyone with **service-role** DB access plus **`TOKEN_ENCRYPTION_KEY_CURRENT`** (or PREVIOUS during rotation) can recover tokens. |
 
 ---
 
@@ -34,8 +34,8 @@ Scope: GitHub-integrated code review assistant (Express API, React SPA, Supabase
 |---|---|
 | **Description** | Stolen or forged JWT used against REST or Socket.IO. |
 | **Impact** | Unauthorized API access, joining wrong realtime rooms. |
-| **Mitigation (existing)** | `JWT_SECRET` strength enforced on login path (`backend/src/controllers/authController.js`); `authenticate` middleware verifies Bearer tokens (`backend/src/middleware/auth.js`); Socket.IO handshake validates JWT and loads user (`backend/src/socket/registerSocketIO.js`, `backend/src/utils/socketUserFromToken.js`); `join:repo` checks repo ownership in DB. |
-| **Residual risk** | XSS on SPA stealing `localStorage` token; weak `JWT_SECRET` in misconfigured deploy. |
+| **Mitigation (existing)** | `JWT_SECRET` strength enforced in production; session JWT in **httpOnly** cookie (`backend/src/utils/authCookie.js`); `authenticate` reads cookie or Bearer (`backend/src/middleware/auth.js`); Socket.IO uses cookie or handshake token (`registerSocketIO.js`, `socketUserFromToken.js`); `join:repo` checks repo ownership. CORS `credentials: true` with `FRONTEND_URL` allowlist only. |
+| **Residual risk** | XSS can still invoke credentialed API calls as the user; weak secrets in misconfigured deploy. |
 
 ---
 
@@ -43,31 +43,29 @@ Scope: GitHub-integrated code review assistant (Express API, React SPA, Supabase
 
 | | |
 |---|---|
-| **Description** | High-volume automated calls exhaust CPU, GitHub quota, or Supabase. |
-| **Impact** | Degraded service, cost, blocked legitimate users. |
-| **Mitigation (existing)** | `express-rate-limit` global limiter (`backend/src/middleware/rateLimiter.js`); webhooks and `/health` excluded from limiter so legitimate GitHub bursts are not dropped (documented in README). |
-| **Residual risk** | Distributed abuse across IPs; GitHub API limits still apply per user token. |
+| **Description** | Brute-force or flood against auth, reviews, or webhooks. |
+| **Impact** | DoS, credential stuffing noise, queue saturation. |
+| **Mitigation (existing)** | `express-rate-limit` on API routes; stricter `authLimiter` on OAuth; webhooks excluded from global limiter so legitimate GitHub bursts are not dropped (`rateLimiter.js`). |
+| **Residual risk** | Distributed attacks above single-node limits; no WAF in thesis scope. |
 
 ---
 
-## 5. Frontend origin abuse (CORS / Socket.IO)
+## 5. Queue job loss (Redis)
 
 | | |
 |---|---|
-| **Description** | Malicious site in browser makes credentialed requests if origins are too loose. |
-| **Impact** | Cross-origin data exfiltration or confused deputy if cookies/CORS misconfigured. |
-| **Mitigation (existing)** | **Production:** only explicit `FRONTEND_URL` list (`backend/src/utils/frontendOrigins.js`). **Non-production:** controlled relaxations for local/LAN thesis dev (same file); `FRONTEND_DEV_EXTRA_ORIGINS` optional. Express + Socket.IO share the same origin callback (`backend/src/server.js`). |
-| **Residual risk** | Running with `NODE_ENV !== 'production'` on a public host would widen dev relaxations — use `NODE_ENV=production` for real deployments. |
+| **Description** | Redis restarted without persistence loses Bull jobs. |
+| **Impact** | Reviews stuck in `pending` / lost work. |
+| **Mitigation (existing)** | Production requires `QUEUE_DRIVER=redis`; startup warns if AOF/RDB not detected (`redisPersistenceCheck.js`). Operators should enable `appendonly yes` or `save` (README §11). |
+| **Residual risk** | Misconfigured managed Redis without persistence. |
 
 ---
 
-## Summary
+## 6. Service role key exposure
 
-| Threat area | Primary control location |
-|-------------|-------------------------|
-| Webhook authenticity | `webhookController.js`, `server.js` (raw body route) |
-| Token / session | `authController.js`, `auth.js`, `socketUserFromToken.js` |
-| Abuse | `rateLimiter.js` |
-| Browser origins | `frontendOrigins.js`, `server.js` |
-
-For coordinated disclosure, see `SECURITY.md`.
+| | |
+|---|---|
+| **Description** | `SUPABASE_SERVICE_KEY` embedded in frontend build or logs. |
+| **Impact** | Full database read/write bypassing RLS. |
+| **Mitigation (existing)** | Key only in backend `database.js`; startup rejects `VITE_SUPABASE_SERVICE_KEY` and similar env vars (`validateProductionEnv.js`). |
+| **Residual risk** | Accidental commit of `.env` or screenshot of Railway/Vercel env UI. |

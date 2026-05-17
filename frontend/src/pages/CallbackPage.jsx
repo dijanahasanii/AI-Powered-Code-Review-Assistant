@@ -54,9 +54,9 @@ export default function CallbackPage() {
         if (cancelled) return;
         if (oauthSuccessGuard.has(code)) return;
         oauthSuccessGuard.add(code);
-        const { token, user } = res.data ?? {};
-        if (!token || !user) throw new Error('Invalid auth response payload');
-        login(token, user);
+        const { user } = res.data ?? {};
+        if (!user) throw new Error('Invalid auth response payload');
+        login(user);
         navigate('/', { replace: true });
       })
       .catch((err) => {

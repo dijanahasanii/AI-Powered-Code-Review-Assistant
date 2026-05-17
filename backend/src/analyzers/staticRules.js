@@ -2,6 +2,7 @@
 
 const { clipSnippet } = require('../lib/diffParseUtils');
 const { SECRET_SHAPE } = require('../lib/secretRegex');
+const { isRemediationNoiseLine } = require('../lib/remediationMarkers');
 const JWT_ASSIGN =
   /\b[A-Z][A-Z0-9]*_(?:SECRET|KEY|TOKEN|PASSWORD)\s*=\s*['"][^'"\\]{3,512}['"]/i;
 const ADMIN_PASS_ASSIGN = /ADMIN_(PASS|PASSWORD)\s*=\s*['"][^'"]{4,}['"]/i;
@@ -485,6 +486,8 @@ function runStaticRulesOnFiles(files) {
     for (let i = 0; i < lines.length; i += 1) {
       const line = lines[i];
       const ln = i + 1;
+
+      if (isRemediationNoiseLine(line)) continue;
 
       for (const rule of LINE_CHECKS) {
         if (rule.skipTestFiles && testFile) continue;

@@ -3,16 +3,17 @@
  */
 const { AppError } = require('../middleware/errorHandler');
 const { logger } = require('../utils/logger');
-const usersRepository = require('../repositories/usersRepository');
+const { getGithubAccessTokenForUser } = require('./userTokenService');
 const reposRepository = require('../repositories/reposRepository');
 const { createOctokit, installGithubPushWebhook } = require('./githubWebhookService');
+const { deleteReportsForRepository } = require('./reportGeneratorService');
 
 async function requireGithubToken(userId) {
-  const { data: userRecord, error } = await usersRepository.getAccessToken(userId);
-  if (error || !userRecord?.access_token) {
+  const token = await getGithubAccessTokenForUser(userId);
+  if (!token) {
     throw new AppError('GitHub access token not found — please log in again', 401);
   }
-  return userRecord.access_token;
+  return token;
 }
 
 async function listConnectedRepos(userId) {
@@ -75,8 +76,14 @@ async function disconnectRepository(userId, repositoryId) {
 
   if (error || !repo) throw new AppError('Repository not found', 404);
 
-  // DB first: code_reviews has ON DELETE CASCADE (issues + file stats follow). Avoids an extra bulk delete
-  // round-trip and returns the HTTP response as soon as Postgres finishes.
+  try {
+    await deleteReportsForRepository(repositoryId);
+  } catch (e) {
+    logger.error(`[repos] delete analysis reports for ${repositoryId}: ${e.message}`);
+    throw new AppError('Could not remove analysis reports for this repository', 500);
+  }
+
+  // DB: code_reviews CASCADE from repositories; reports removed explicitly above (and via FK when present).
   const { error: delErr } = await reposRepository.deleteById(repositoryId);
   if (delErr) {
     logger.error(`[repos] delete repository ${repositoryId}:`, delErr);

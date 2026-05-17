@@ -4,7 +4,10 @@
  */
 require('dotenv').config();
 const { supabase } = require('../src/config/database');
-const { generateAndPersistReport } = require('../src/services/reportGeneratorService');
+const {
+  generateAndPersistReport,
+  buildAnalysisPayloadForReview,
+} = require('../src/services/reportGeneratorService');
 const { logger } = require('../src/utils/logger');
 
 async function main() {
@@ -24,37 +27,7 @@ async function main() {
   for (const review of completed || []) {
     if (hasReport.has(review.id)) continue;
 
-    const { data: issues } = await supabase
-      .from('review_issues')
-      .select('*')
-      .eq('review_id', review.id);
-
-    const issueRows = issues || [];
-    const analysis = {
-      summary: null,
-      overallScore: null,
-      issues: issueRows.map((row) => ({
-        filePath: row.file_path,
-        lineNumber: row.line_number,
-        severity: row.severity,
-        category: row.category,
-        title: row.title,
-        description: row.description,
-        suggestion: row.suggestion,
-        codeSnippet: row.code_snippet,
-        matchedRule: row.matched_rule,
-      })),
-    };
-
-    const { data: reviewFull } = await supabase
-      .from('code_reviews')
-      .select('summary, overall_score')
-      .eq('id', review.id)
-      .single();
-    if (reviewFull) {
-      analysis.summary = reviewFull.summary;
-      analysis.overallScore = reviewFull.overall_score;
-    }
+    const analysis = await buildAnalysisPayloadForReview(review.id);
 
     const repoName =
       review.repositories?.name || review.repositories?.full_name?.split('/').pop() || 'repository';

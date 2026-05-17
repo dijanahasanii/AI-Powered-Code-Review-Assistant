@@ -5,6 +5,7 @@ validateProductionEnvironment();
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
+const cookieParser = require('cookie-parser');
 const morgan = require('morgan');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
@@ -29,6 +30,9 @@ const { registerSocketIO } = require('./socket/registerSocketIO');
 const { buildHealthPayload } = require('./utils/healthPayload');
 
 const app = express();
+if (process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', 1);
+}
 const httpServer = createServer(app);
 
 /** CORS / Socket.IO: allow non-browser probes (no Origin) and validated SPA origins only. */
@@ -50,11 +54,10 @@ function logProductionDeploymentHints() {
     logger.warn('[deploy] JWT_SECRET should be at least 32 random characters in production.');
   }
 
-  const be = (process.env.BACKEND_URL || '').trim().replace(/\/+$/, '');
-  if (!be || /^http:\/\//i.test(be)) {
-    logger.warn(
-      '[deploy] BACKEND_URL should normally be HTTPS (GitHub webhook delivery expects a public HTTPS URL).'
-    );
+  const { validateBackendUrl } = require('./config/validateProductionEnv');
+  const backendErr = validateBackendUrl(process.env.BACKEND_URL);
+  if (backendErr) {
+    logger.warn(`[deploy] ${backendErr}`);
   }
 
   fe.forEach((entry) => {
@@ -94,6 +97,7 @@ app.use(
 
 // Raw body parser for GitHub webhook signature verification — MUST come before json parser
 app.use('/api/webhooks', express.raw({ type: 'application/json', limit: '1024kb' }));
+app.use(cookieParser());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan('combined', { stream: { write: (msg) => logger.http(msg.trim()) } }));
@@ -140,33 +144,57 @@ httpServer.on('error', (err) => {
   throw err;
 });
 
-httpServer.listen(PORT, () => {
-  logger.info(`Server running on port ${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
-  logProductionDeploymentHints();
-  // Initialize background job worker
-  initializeWorker(io);
+const { warnIfRedisPersistenceMissing } = require('./config/redisPersistenceCheck');
+const { closeReviewQueue } = require('./services/reviewQueue');
 
-  const base = (process.env.BACKEND_URL || '').replace(/\/+$/, '');
-  const hasSecret = !!process.env.GITHUB_WEBHOOK_SECRET;
-  if (!base || base.includes('your-backend') || !hasSecret) {
-    logger.warn(
-      '┌─ GitHub webhooks (auto-review on push) ─────────────────────────────────────'
-    );
-    logger.warn(
-      '│ Set BACKEND_URL to a PUBLIC https URL (use ngrok: npx ngrok http ' +
-        PORT +
-        ').'
-    );
-    logger.warn('│ Set GITHUB_WEBHOOK_SECRET to a long random string (same when you reconnect).');
-    logger.warn(
-      '│ Then in the app: disconnect repo → connect again → push code. Details: WEBHOOK_QUICKSTART.md'
-    );
-    logger.warn(
-      '└──────────────────────────────────────────────────────────────────────────────'
-    );
-  } else {
-    logger.info(`Webhooks exposed at: ${base}/api/webhooks/github`);
-  }
-});
+function startServer() {
+  httpServer.listen(PORT, () => {
+    logger.info(`Server running on port ${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
+    logProductionDeploymentHints();
+    initializeWorker(io);
+    void warnIfRedisPersistenceMissing();
 
-module.exports = { app, httpServer };
+    const base = (process.env.BACKEND_URL || '').replace(/\/+$/, '');
+    const hasSecret = !!process.env.GITHUB_WEBHOOK_SECRET;
+    if (!base || base.includes('your-backend') || !hasSecret) {
+      logger.warn(
+        '┌─ GitHub webhooks (auto-review on push) ─────────────────────────────────────'
+      );
+      logger.warn(
+        '│ Set BACKEND_URL to a PUBLIC https URL (use ngrok: npx ngrok http ' +
+          PORT +
+          ').'
+      );
+      logger.warn('│ Set GITHUB_WEBHOOK_SECRET to a long random string (same when you reconnect).');
+      logger.warn(
+        '│ Then in the app: disconnect repo → connect again → push code. Details: WEBHOOK_QUICKSTART.md'
+      );
+      logger.warn(
+        '└──────────────────────────────────────────────────────────────────────────────'
+      );
+    } else {
+      logger.info(`Webhooks exposed at: ${base}/api/webhooks/github`);
+    }
+  });
+}
+
+if (require.main === module) {
+  startServer();
+}
+
+/**
+ * Graceful shutdown for tests and process managers.
+ */
+async function closeHttpServer() {
+  await closeReviewQueue();
+  return new Promise((resolve, reject) => {
+    io.close();
+    if (!httpServer.listening) {
+      resolve();
+      return;
+    }
+    httpServer.close((err) => (err ? reject(err) : resolve()));
+  });
+}
+
+module.exports = { app, httpServer, io, startServer, closeHttpServer };

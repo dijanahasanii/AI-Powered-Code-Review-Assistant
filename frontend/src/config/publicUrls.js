@@ -37,6 +37,10 @@ export function getPublicApiBaseUrl() {
   }
 
   if (import.meta.env.DEV) {
+    // Same-origin + Vite proxy (/api → backend) so httpOnly cookies work without cross-site setup.
+    if (typeof window !== 'undefined' && window.location?.origin) {
+      return stripTrailingSlashes(window.location.origin);
+    }
     return 'http://localhost:3001';
   }
 

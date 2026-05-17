@@ -46,6 +46,7 @@ if (Number.isNaN(major) || major < 18) {
 }
 
 const backendEnv = parseEnvFile(backendEnvPath);
+const feEnv = parseEnvFile(frontendEnvPath);
 
 if (!backendEnv) {
   errors.push('Missing backend/.env — copy backend/.env.example to backend/.env (required for Supabase + JWT)');
@@ -56,6 +57,13 @@ if (!backendEnv) {
       errors.push(`backend/.env: set a real value for ${k} (server exits at boot if Supabase vars are missing)`);
     }
   }
+  const encCurrent =
+    backendEnv.TOKEN_ENCRYPTION_KEY_CURRENT || backendEnv.TOKEN_ENCRYPTION_KEY || '';
+  if (!encCurrent || looksPlaceholder(encCurrent)) {
+    errors.push(
+      'backend/.env: set TOKEN_ENCRYPTION_KEY_CURRENT (or legacy TOKEN_ENCRYPTION_KEY) for GitHub token encryption'
+    );
+  }
   const jwt = backendEnv.JWT_SECRET || '';
   if (jwt.length > 0 && jwt.length < 16) {
     errors.push('backend/.env: JWT_SECRET must be at least 16 characters (32+ recommended for production)');
@@ -63,6 +71,21 @@ if (!backendEnv) {
   const supa = backendEnv.SUPABASE_URL || '';
   if (supa.includes('/rest/v1')) {
     warnings.push('backend/.env: SUPABASE_URL should be the project base only (https://xxx.supabase.co), not …/rest/v1');
+  }
+
+  if (encCurrent && !/^[0-9a-f]{64}$/i.test(encCurrent.trim())) {
+    warnings.push(
+      'backend/.env: TOKEN_ENCRYPTION_KEY_CURRENT should be 64 hex characters (32 bytes) — see backend/.env.example'
+    );
+  }
+  for (const forbidden of [
+    'VITE_SUPABASE_SERVICE_KEY',
+    'NEXT_PUBLIC_SUPABASE_SERVICE_KEY',
+    'PUBLIC_SUPABASE_SERVICE_KEY',
+  ]) {
+    if (backendEnv[forbidden] || feEnv?.[forbidden]) {
+      errors.push(`${forbidden} must not be set — Supabase service role is backend-only`);
+    }
   }
 
   for (const k of ['GITHUB_CLIENT_ID', 'GITHUB_CLIENT_SECRET', 'GITHUB_WEBHOOK_SECRET', 'BACKEND_URL', 'FRONTEND_URL']) {
@@ -73,7 +96,6 @@ if (!backendEnv) {
   }
 }
 
-const feEnv = parseEnvFile(frontendEnvPath);
 if (!feEnv) {
   warnings.push(
     'Missing frontend/.env — copy frontend/.env.example (login uses GET /api/auth/github; VITE_GITHUB_CLIENT_ID is optional)'

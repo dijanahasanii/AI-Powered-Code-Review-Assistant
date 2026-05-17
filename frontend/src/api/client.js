@@ -8,27 +8,22 @@ const api = axios.create({
   timeout: 15000,
 });
 
-/** Prevents cascades of 401s firing multiple competing full-page redirects during token expiry bursts */
+/** Prevents cascades of 401s firing multiple competing full-page redirects during session expiry bursts */
 let redirectingAfterAuthFailure = false;
-
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
-});
 
 api.interceptors.response.use(
   (res) => res,
   (err) => {
+    const status = err.response?.status;
+    const requestUrl = String(err.config?.url || '');
+    const isAuthMeProbe = requestUrl.includes('/api/auth/me');
     const isCallbackPage = window.location.pathname === '/auth/callback';
-    if (err.response?.status === 401 && !isCallbackPage) {
+    const isPublicHome = window.location.pathname === '/';
+
+    // 401 on /api/auth/me is normal when logged out — do not full-page redirect (causes reload loop).
+    if (status === 401 && !isCallbackPage && !isAuthMeProbe && !isPublicHome) {
       if (!redirectingAfterAuthFailure) {
         redirectingAfterAuthFailure = true;
-        try {
-          localStorage.removeItem('token');
-        } catch {
-          /* storage may be unavailable in hardened browsers — still navigate */
-        }
         window.location.replace(`${window.location.origin}/`);
       }
     }
@@ -40,6 +35,7 @@ attachApiContractGuard(api);
 
 export const authApi = {
   getMe: () => api.get('/api/auth/me'),
+  logout: () => api.post('/api/auth/logout'),
   githubCallback: (code, state) =>
     api.get('/api/auth/github/callback', {
       params: {
@@ -77,6 +73,7 @@ export const reportsApi = {
   getOne: (id, config) => api.get(`/api/reports/${id}`, config),
   getMarkdown: (id) => api.get(`/api/reports/${id}/markdown`),
   confirmRemediation: (id) => api.post(`/api/reports/${id}/confirm-remediation`),
+  rescanAfterFix: (id) => api.post(`/api/reports/${id}/rescan-after-fix`),
 };
 
 export default api;

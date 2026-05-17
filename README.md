@@ -123,7 +123,7 @@ users
 ├── id (UUID PK)
 ├── github_id (BIGINT UNIQUE)
 ├── username, email, avatar_url
-├── access_token (GitHub OAuth token — plaintext in this thesis build; see SECURITY.md)
+├── access_token (GitHub OAuth token — AES-256-GCM encrypted at rest; see SECURITY.md)
 └── created_at, updated_at
 
 repositories
@@ -224,7 +224,7 @@ backend/
 
 ### Authentication
 
-Uses GitHub OAuth 2.0 for login. The SPA navigates to **`GET /api/auth/github`**, which redirects to GitHub with a signed **`state`** parameter (CSRF mitigation); GitHub returns to `/auth/callback` with **`code`** and **`state`**, and the SPA calls **`GET /api/auth/github/callback`** to complete the exchange. After OAuth, the backend issues its own JWT (7-day expiry). The JWT is stored in `localStorage` on the frontend and sent as a `Bearer` token on every request. The `authenticate` middleware verifies the JWT and fetches the user from the database.
+Uses GitHub OAuth 2.0 for login. The SPA navigates to **`GET /api/auth/github`**, which redirects to GitHub with a signed **`state`** parameter (CSRF mitigation); GitHub returns to `/auth/callback` with **`code`** and **`state`**, and the SPA calls **`GET /api/auth/github/callback`** to complete the exchange. After OAuth, the backend issues its own JWT (7-day expiry) in an **httpOnly** session cookie (`acr_session`). The SPA uses credentialed requests (`withCredentials: true`); the `authenticate` middleware reads the cookie (or `Authorization: Bearer` for tests) and fetches the user from the database.
 
 ### Error handling strategy
 
@@ -518,14 +518,15 @@ Vercel is ideal for React/Vite apps:
 
 **Steps**:
 1. `vercel login` then `vercel --prod` in the `frontend/` directory
-2. Set `VITE_API_URL` and `VITE_WS_URL` in Vercel environment variables
+2. Set `VITE_API_URL` and `VITE_WS_URL` to your **HTTPS** backend origin (must match CORS `FRONTEND_URL` on the API)
 3. All routes → `index.html` via Vercel's SPA rewrite rules
+4. The SPA uses **httpOnly session cookies** (`withCredentials: true`) — API and SPA origins must be configured for credentialed CORS (see `FRONTEND_URL` on the backend)
 
 ### Backend — Railway
 
 Railway supports Node.js apps with Redis and PostgreSQL add-ons:
 - GitHub integration for automatic deploys
-- Redis add-on available (for Bull queue)
+- Redis add-on required in production (`QUEUE_DRIVER=redis`)
 - Environment variables managed via UI
 - Free tier available; $5/month for always-on
 
@@ -533,9 +534,13 @@ Railway supports Node.js apps with Redis and PostgreSQL add-ons:
 
 **Steps**:
 1. Connect GitHub repo in Railway dashboard
-2. Add Redis add-on → `REDIS_URL` set automatically
-3. Set all environment variables from `.env.example`
-4. Set start command: `node src/server.js`
+2. Add Redis add-on → set `REDIS_URL` and `QUEUE_DRIVER=redis`
+3. Set `NODE_ENV=production` and all variables from `backend/.env.example`, including:
+   - `TOKEN_ENCRYPTION_KEY_CURRENT` (32-byte hex; optional `TOKEN_ENCRYPTION_KEY_PREVIOUS` during rotation)
+   - `BACKEND_URL` (public **HTTPS** API base, no trailing slash, not localhost)
+   - `JWT_SECRET`, Supabase keys, GitHub OAuth + `GITHUB_WEBHOOK_SECRET`, `FRONTEND_URL`
+4. Set start command: `node src/server.js` (from `backend/` root)
+5. Update GitHub OAuth callback URL and reconnect repo webhooks to `BACKEND_URL`
 
 ### Database — Supabase
 
@@ -550,6 +555,32 @@ Railway supports Node.js apps with Redis and PostgreSQL add-ons:
 - `.env.example` as a template (committed to the repo)
 - Platform-specific secret managers (Railway env vars, Vercel env vars, GitHub Secrets for CI)
 - Different values per environment (development, staging, production)
+
+**Production-required backend variables** (enforced at startup when `NODE_ENV=production`):
+
+| Variable | Purpose |
+|----------|---------|
+| `TOKEN_ENCRYPTION_KEY_CURRENT` | AES-256 key for new GitHub token ciphertext (`v2:`) |
+| `TOKEN_ENCRYPTION_KEY_PREVIOUS` | Optional prior key during rotation (auto re-encrypt on read) |
+| `QUEUE_DRIVER=redis` | Durable Bull queue (not in-process) |
+| `REDIS_URL` | Redis connection for the queue |
+| `BACKEND_URL` | Public HTTPS webhook base (no localhost) |
+| `FRONTEND_URL` | Allowed SPA origin(s) for CORS, cookies, OAuth |
+
+Local development may omit `QUEUE_DRIVER` (in-process jobs) and use ngrok for `BACKEND_URL`.
+
+### Redis persistence (recommended)
+
+When `QUEUE_DRIVER=redis`, configure Redis so Bull jobs survive restarts:
+
+```conf
+appendonly yes
+appendfsync everysec
+```
+
+Alternatively enable RDB snapshots (`save` directives). If neither AOF nor RDB is active, the API logs at startup:
+
+`Redis persistence not detected. Jobs may be lost after restart.`
 
 See [SECURITY.md](SECURITY.md) for secret handling and vulnerability reporting.
 
@@ -608,16 +639,17 @@ This section is kept aligned with the **current** implementation (not the origin
 
 **Risk**: Stolen **GitHub OAuth tokens** in `users.access_token` allow API access as the user; stolen **app JWTs** allow dashboard/API access until expiry.
 
-**Status**: **Partially mitigated** — **HTTPS**, **application JWTs**, and **strong `JWT_SECRET` enforcement** are in place; **database encryption of `access_token` is not implemented** (tokens are stored as plaintext in PostgreSQL).
+**Status**: **Mitigated for thesis deployment** — **HTTPS**, **httpOnly session cookies**, **versioned AES-256-GCM** for GitHub `access_token` (`TOKEN_ENCRYPTION_KEY_CURRENT` / `PREVIOUS`), and **strong `JWT_SECRET` enforcement** in production.
 
 **Verified mitigations**:
-- App JWT: **`jwt.sign(..., { expiresIn: process.env.JWT_EXPIRES_IN || '7d' })`** — refresh by re-running OAuth when the token expires.
-- Login path refuses weak config: **`JWT_SECRET`** must exist and be **≥ 16 characters** (`authController.js`).
-- Host **HTTPS** (e.g. Railway/Vercel) protects tokens in transit.
+- App JWT: **`jwt.sign(..., { expiresIn: process.env.JWT_EXPIRES_IN || '7d' })`** in an **httpOnly** cookie (`acr_session`) with `SameSite=lax` (same origin) or `none` + `Secure` (split SPA/API hosts).
+- GitHub tokens: encrypted as `v2:` ciphertext; decrypt tries **CURRENT** then **PREVIOUS**; rows decrypted with **PREVIOUS** are re-encrypted with **CURRENT** on next use.
+- Production startup requires **`TOKEN_ENCRYPTION_KEY_CURRENT`**, **`QUEUE_DRIVER=redis`**, valid **`BACKEND_URL`**, and rejects client-exposed `VITE_SUPABASE_SERVICE_KEY` patterns.
+- Host **HTTPS** (e.g. Railway/Vercel) protects cookies and tokens in transit.
 
-**Open hardening (not implemented; requires careful rollout)**:
-- **Encrypt `access_token` at the application layer** (e.g. AES-256-GCM with a **`TOKEN_ENCRYPTION_KEY`**) with **backwards compatibility** for existing rows, or use a **secrets manager** / **vault** for the column.
+**Residual risk**:
 - Restrict **Supabase dashboard / service role** access and rotate keys on any suspicion of DB exposure.
+- During encryption key rotation, set **`TOKEN_ENCRYPTION_KEY_PREVIOUS`** to the old key until all rows have been re-encrypted (automatic on token read).
 
 ---
 

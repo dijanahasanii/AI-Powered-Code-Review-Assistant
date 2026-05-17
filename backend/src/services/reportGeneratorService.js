@@ -215,6 +215,50 @@ async function readReportMarkdown(reportPath) {
   return fs.readFile(absolutePath, 'utf8');
 }
 
+function resolveReportAbsolutePath(reportPath) {
+  const relative = String(reportPath || '').replace(/^reports[/\\]/, '');
+  if (!relative) return null;
+  return path.join(REPORTS_DIR, relative);
+}
+
+/**
+ * Remove analysis_reports rows and markdown files for a disconnected repository.
+ */
+async function deleteReportsForRepository(repositoryId) {
+  const { data: rows, error } = await reportsRepository.listReportPathsByRepositoryId(repositoryId);
+  if (error) {
+    if (/analysis_reports/i.test(String(error.message || '')) || error.code === '42P01') {
+      return { deleted: 0 };
+    }
+    throw new Error(`deleteReportsForRepository: ${error.message}`);
+  }
+
+  const list = rows || [];
+  await Promise.all(
+    list.map(async (row) => {
+      const absolutePath = resolveReportAbsolutePath(row.report_path);
+      if (!absolutePath) return;
+      try {
+        await fs.unlink(absolutePath);
+      } catch (err) {
+        if (err?.code !== 'ENOENT') {
+          logger.warn(`deleteReportsForRepository: could not remove file ${absolutePath}: ${err.message}`);
+        }
+      }
+    })
+  );
+
+  const { error: delErr } = await reportsRepository.deleteByRepositoryId(repositoryId);
+  if (delErr && !/analysis_reports/i.test(String(delErr.message || ''))) {
+    throw new Error(`deleteReportsForRepository DB: ${delErr.message}`);
+  }
+
+  if (list.length) {
+    logger.info(`Removed ${list.length} analysis report(s) for repository ${repositoryId}`);
+  }
+  return { deleted: list.length };
+}
+
 /**
  * Load issues for a review from DB (for remediation).
  */
@@ -228,12 +272,128 @@ async function loadReviewIssues(reviewId) {
   return data || [];
 }
 
+function mapIssueRow(row) {
+  return {
+    filePath: row.file_path,
+    lineNumber: row.line_number,
+    severity: row.severity,
+    category: row.category,
+    title: row.title,
+    description: row.description,
+    suggestion: row.suggestion,
+    codeSnippet: row.code_snippet,
+    matchedRule: row.matched_rule,
+  };
+}
+
+async function buildAnalysisPayloadForReview(reviewId) {
+  const { data: issues, error: issuesErr } = await supabase
+    .from('review_issues')
+    .select('*')
+    .eq('review_id', reviewId);
+  if (issuesErr) throw new Error(`buildAnalysisPayloadForReview: ${issuesErr.message}`);
+
+  const { data: reviewFull, error: reviewErr } = await supabase
+    .from('code_reviews')
+    .select('summary, overall_score')
+    .eq('id', reviewId)
+    .single();
+  if (reviewErr) throw new Error(`buildAnalysisPayloadForReview: ${reviewErr.message}`);
+
+  return {
+    summary: reviewFull?.summary ?? null,
+    overallScore: reviewFull?.overall_score ?? null,
+    issues: (issues || []).map(mapIssueRow),
+  };
+}
+
+/**
+ * Create analysis_reports for completed reviews that never got a report (e.g. transient DB error).
+ */
+async function ensureMissingReportsForUser(userId, { limit = 20 } = {}) {
+  const { data: repos, error: repoErr } = await supabase
+    .from('repositories')
+    .select('id, name, full_name')
+    .eq('user_id', userId);
+  if (repoErr) throw new Error(`ensureMissingReportsForUser: ${repoErr.message}`);
+
+  const repoList = repos || [];
+  const repoIds = repoList.map((r) => r.id);
+  if (!repoIds.length) return { created: 0 };
+
+  const repoById = new Map(repoList.map((r) => [r.id, r]));
+
+  const { data: completed, error: revErr } = await supabase
+    .from('code_reviews')
+    .select('id, repository_id, commit_sha, branch, triggered_by')
+    .in('repository_id', repoIds)
+    .eq('status', 'completed')
+    .order('completed_at', { ascending: false })
+    .limit(100);
+  if (revErr) throw new Error(`ensureMissingReportsForUser: ${revErr.message}`);
+
+  const reviewRows = completed || [];
+  if (!reviewRows.length) return { created: 0 };
+
+  const reviewIds = reviewRows.map((r) => r.id);
+  const { data: existingReports, error: repErr } = await supabase
+    .from('analysis_reports')
+    .select('review_id')
+    .in('review_id', reviewIds);
+  if (repErr) {
+    if (/analysis_reports/i.test(String(repErr.message || '')) || repErr.code === 'PGRST205') {
+      return { created: 0 };
+    }
+    throw new Error(`ensureMissingReportsForUser: ${repErr.message}`);
+  }
+
+  const hasReport = new Set((existingReports || []).map((r) => r.review_id));
+  let created = 0;
+
+  for (const review of reviewRows) {
+    if (created >= limit) break;
+    if (hasReport.has(review.id)) continue;
+
+    const repo = repoById.get(review.repository_id);
+    const repositoryName =
+      repo?.name || repo?.full_name?.split('/').pop() || 'repository';
+
+    try {
+      const analysis = await buildAnalysisPayloadForReview(review.id);
+      await generateAndPersistReport({
+        reviewId: review.id,
+        repositoryId: review.repository_id,
+        repositoryName,
+        branch: review.branch,
+        commitSha: review.commit_sha,
+        triggeredBy: review.triggered_by,
+        analysis,
+      });
+      created += 1;
+      hasReport.add(review.id);
+    } catch (err) {
+      logger.error(`ensureMissingReportsForUser backfill failed: ${err.message}`, {
+        reviewId: review.id,
+      });
+    }
+  }
+
+  if (created > 0) {
+    logger.info(`Backfilled ${created} missing analysis report(s) for user ${userId}`);
+  }
+
+  return { created };
+}
+
 module.exports = {
   REPORTS_DIR,
   buildMarkdownReport,
   generateAndPersistReport,
   readReportMarkdown,
+  deleteReportsForRepository,
   loadReviewIssues,
+  buildAnalysisPayloadForReview,
+  ensureMissingReportsForUser,
   countSeverities,
   isFixAvailable,
 };

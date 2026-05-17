@@ -1,15 +1,15 @@
 const jwt = require('jsonwebtoken');
 const { AppError } = require('./errorHandler');
 const { supabase } = require('../config/database');
+const { getJwtFromRequest } = require('../utils/authCookie');
 
 const authenticate = async (req, res, next) => {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    const token = getJwtFromRequest(req);
+    if (!token) {
       throw new AppError('No token provided', 401);
     }
 
-    const token = authHeader.split(' ')[1];
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
     // Verify user still exists in database

@@ -4,6 +4,6 @@ module.exports = {
   setupFiles: ['./src/__tests__/setup.js'],
   collectCoverageFrom: ['src/**/*.js', '!src/__tests__/**', '!src/config/migrate.js'],
   coverageReporters: ['text', 'lcov'],
-  forceExit: true,
   clearMocks: true,
+  globalTeardown: './src/__tests__/globalTeardown.js',
 };

@@ -78,6 +78,9 @@ export default function ReviewDetailPage() {
       if (rid != null && String(rid) === String(id)) {
         queryClient.invalidateQueries({ queryKey: queryKeys.reviewDetail(id) });
       }
+      if (update?.status === 'completed' || update?.status === 'failed') {
+        queryClient.invalidateQueries({ queryKey: queryKeys.reportsAll });
+      }
     });
     return unsub;
   }, [id, onReviewUpdate, queryClient]);
