@@ -41,3 +41,13 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm test
+        env:
+          NODE_ENV: test
+          SUPABASE_URL: https://test.supabase.local
+          SUPABASE_SERVICE_KEY: test-service-role-placeholder
+          JWT_SECRET: test-secret-at-least-32-characters-long-for-jest-suite
+          TOKEN_ENCRYPTION_KEY_CURRENT: a1b2c3d4e5f6789012345678abcdef9012345678abcdef9012345678abcdef90
+          TOKEN_ENCRYPTION_KEY_PREVIOUS: fedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321
+          GITHUB_WEBHOOK_SECRET: test-webhook-secret
+          GITHUB_CLIENT_ID: test-github-oauth-client-id
+          GITHUB_CLIENT_SECRET: test-github-oauth-client-secret
