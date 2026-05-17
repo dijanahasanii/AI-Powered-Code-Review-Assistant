@@ -45,18 +45,19 @@ export function ReportAfterPushBanner({ report }) {
               they do not update automatically.
             </p>
             <p className="mt-2 text-sm leading-relaxed text-emerald-900/80 dark:text-emerald-100/75">
-              To see how the code looks after the fix, go to <strong className="font-medium">Reviews</strong> and click{' '}
-              <strong className="font-medium">Review latest</strong> for this repo (pick <code className="font-mono text-[0.9em]">main</code>{' '}
-              or the branch you pushed), then open the new run when it completes.
+              To see how the code looks after the fix, open <strong className="font-medium">Repositories</strong>, click{' '}
+              <strong className="font-medium">Review latest</strong> for this repo (branch{' '}
+              <code className="font-mono text-[0.9em]">main</code> or the one you pushed), then check{' '}
+              <strong className="font-medium">Reviews</strong> for the new run when it completes.
             </p>
           </div>
         </div>
 
         <Link
-          to="/reviews"
+          to="/repositories"
           className="btn-secondary inline-flex shrink-0 items-center justify-center gap-2 self-start border-emerald-600/25 bg-white/60 px-4 py-2 text-sm font-medium text-emerald-950 hover:bg-white/90 dark:border-emerald-500/30 dark:bg-emerald-950/40 dark:text-emerald-50 dark:hover:bg-emerald-950/60"
         >
-          Reviews · Review latest
+          Repositories · Review latest
           <ArrowRight size={15} aria-hidden="true" />
         </Link>
       </div>

@@ -4,12 +4,9 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
 import ReviewsPage from './ReviewsPage';
-import { ToastProvider } from '../components/common/Toast';
 import { createTestQueryClient } from '../test/createTestQueryClient';
 
 const reviewsListMock = vi.hoisted(() => vi.fn());
-const reposListMock = vi.hoisted(() => vi.fn());
-const triggerLatestMock = vi.hoisted(() => vi.fn());
 
 vi.mock('../context/AuthContext', () => ({
   useAuth: () => ({
@@ -27,13 +24,12 @@ vi.mock('../api/client', () => ({
     getOne: vi.fn(),
     getStats: vi.fn(),
     trigger: vi.fn(),
-    triggerLatest: (...args) => triggerLatestMock(...args),
+    triggerLatest: vi.fn(),
     retryPending: vi.fn(),
   },
   reposApi: {
-    list: (...args) => reposListMock(...args),
+    list: vi.fn(),
     listGithub: vi.fn(),
-    listBranches: vi.fn(),
     connect: vi.fn(),
     disconnect: vi.fn(),
     syncWebhook: vi.fn(),
@@ -46,29 +42,18 @@ function renderReviews() {
   const client = createTestQueryClient();
   return render(
     <QueryClientProvider client={client}>
-      <ToastProvider>
-        <MemoryRouter initialEntries={['/reviews']}>
-          <Routes>
-            <Route path="/reviews" element={<ReviewsPage />} />
-          </Routes>
-        </MemoryRouter>
-      </ToastProvider>
+      <MemoryRouter initialEntries={['/reviews']}>
+        <Routes>
+          <Route path="/reviews" element={<ReviewsPage />} />
+        </Routes>
+      </MemoryRouter>
     </QueryClientProvider>
   );
 }
 
-const sampleRepo = {
-  id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
-  full_name: 'org/app',
-  webhook_active: true,
-};
-
 describe('ReviewsPage (user behavior)', () => {
   beforeEach(() => {
     reviewsListMock.mockReset();
-    reposListMock.mockReset();
-    triggerLatestMock.mockReset();
-    reposListMock.mockResolvedValue({ data: { data: [sampleRepo] } });
   });
 
   it('shows loading skeletons then review rows when API succeeds', async () => {
@@ -102,7 +87,6 @@ describe('ReviewsPage (user behavior)', () => {
     renderReviews();
 
     expect(screen.getByRole('heading', { name: /reviews/i })).toBeInTheDocument();
-    expect(await screen.findByRole('button', { name: /review latest commit for org\/app/i })).toBeInTheDocument();
 
     await waitFor(() => {
       expect(screen.getByText('abcdef1')).toBeInTheDocument();
@@ -132,26 +116,6 @@ describe('ReviewsPage (user behavior)', () => {
     renderReviews();
 
     expect(await screen.findByRole('heading', { name: /no reviews found/i })).toBeInTheDocument();
-  });
-
-  it('triggers review latest for selected repository', async () => {
-    reviewsListMock.mockResolvedValue({
-      data: {
-        data: [],
-        pagination: { page: 1, limit: 15, total: 0 },
-      },
-    });
-    triggerLatestMock.mockResolvedValue({ data: { meta: {} } });
-
-    const user = userEvent.setup();
-    renderReviews();
-
-    const btn = await screen.findByRole('button', { name: /review latest commit for org\/app/i });
-    await user.click(btn);
-
-    await waitFor(() => {
-      expect(triggerLatestMock).toHaveBeenCalledWith(sampleRepo.id, undefined);
-    });
   });
 
   it('changes status filter and refetches (completed)', async () => {
