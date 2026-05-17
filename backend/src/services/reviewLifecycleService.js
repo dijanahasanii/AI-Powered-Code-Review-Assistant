@@ -83,21 +83,14 @@ async function resolveExistingManualReview(repositoryId, commitSha, repo, userId
  * @param {{ repositoryId: string, repo: object, userId: string, commitSha: string, branch?: string }} params
  * @returns {Promise<{ review: object, reanalysis: boolean, duplicatePending: boolean }>}
  */
-async function enqueueManualReview({
-  repositoryId,
-  repo,
-  userId,
-  commitSha,
-  branch,
-  triggeredBy = 'manual',
-}) {
+async function enqueueManualReview({ repositoryId, repo, userId, commitSha, branch }) {
   const branchLabel = branch || 'main';
 
   const { data: review, error: insertError } = await reviewsRepository.insertManualReviewRow({
     repositoryId,
     commitSha,
     branch: branchLabel,
-    triggeredBy,
+    triggeredBy: 'manual',
   });
 
   if (!insertError) {

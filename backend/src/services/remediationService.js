@@ -7,17 +7,9 @@ const { execFile } = require('child_process');
 const { promisify } = require('util');
 const simpleGit = require('simple-git');
 const { loadUserAccessToken, fetchRepoDefaultBranch } = require('./githubService');
-const { queueReanalysisAfterRemediationPush } = require('./postRemediationReview');
 const reportsRepository = require('../repositories/reportsRepository');
 const { loadReviewIssues } = require('./reportGeneratorService');
 const { applyFixesToFiles } = require('./targetedFixService');
-const { polishFileMapUntilStable } = require('./remediationPolish');
-const {
-  scanRepoDirectory,
-  isRegressionAgainstBaseline,
-  issuesToFixRows,
-} = require('./remediationScan');
-const reviewsRepository = require('../repositories/reviewsRepository');
 const { logger } = require('../utils/logger');
 
 const execFileAsync = promisify(execFile);
@@ -167,14 +159,7 @@ async function runRemediation({ reportId, userId, repoFullName }) {
   const branch = await resolveRemediationBranch(report, repoFullName, userId, logParts);
 
   const issues = await loadReviewIssues(reviewId);
-  const fixableIssues = issues.filter((i) => i.file_path);
-
-  const { data: baselineReview } = await reviewsRepository.selectReviewById(reviewId);
-  const baselineMetrics = {
-    count: report.issue_count ?? fixableIssues.length,
-    score: baselineReview?.overall_score ?? null,
-  };
-
+  const fixableIssues = issues.filter((i) => i.suggestion && i.file_path);
   if (fixableIssues.length === 0) {
     await updateRemediationStatus(reportId, 'failed', {
       remediation_log: 'No issues with suggestions available for automatic remediation.',
@@ -222,82 +207,11 @@ async function runRemediation({ reportId, userId, repoFullName }) {
       }
     }
 
-    let { files: patched, applied, skipped } = applyFixesToFiles(fileMap, fixableIssues, {
-      allowAnnotation: false,
-      removeLines: true,
-    });
-    appendLog(logParts, `Initial pass: ${applied.length} edit(s) from report findings`);
-    patched = polishFileMapUntilStable(patched, logParts, appendLog, baselineMetrics);
-    applied = [{ note: 'includes polish passes' }];
+    const { files: patched, applied, skipped } = applyFixesToFiles(fileMap, fixableIssues);
     skipped.slice(0, 20).forEach((s) =>
       appendLog(logParts, `Skipped ${s.filePath}: ${s.note}`)
     );
-    let anyChange = [...patched.entries()].some(([fp, c]) => fileMap.get(fp) !== c);
-
-    if (!anyChange) {
-      const liveScan = await scanRepoDirectory(repoDir);
-      appendLog(
-        logParts,
-        `Report findings produced no edits; live repo scan: ${liveScan.count} issue(s), score ${liveScan.score}`
-      );
-
-      if (liveScan.count === 0) {
-        appendLog(
-          logParts,
-          'Repository already passes the analyzer — no push needed. Queueing a fresh report at current HEAD.'
-        );
-        const head = (await repoGit.revparse(['HEAD'])).trim();
-        await queueReanalysisAfterRemediationPush({
-          reportId,
-          repositoryId: report.repository_id,
-          userId,
-          repoFullName,
-          pushCommitSha: head,
-          branch,
-          logParts,
-          appendLog,
-        });
-        await updateRemediationStatus(reportId, 'pushed', {
-          remediation_log: logParts.join('\n'),
-          push_commit_sha: report.push_commit_sha || head,
-          pushed_at: report.pushed_at || new Date().toISOString(),
-        });
-        logger.info('Remediation noop — repo already clean', { reportId });
-        return {
-          commitSha: report.push_commit_sha || head,
-          branch,
-          appliedCount: 0,
-          alreadyClean: true,
-        };
-      }
-
-      const liveRows = issuesToFixRows(liveScan.issues);
-      const livePaths = [...new Set(liveRows.map((r) => r.file_path).filter(Boolean))];
-      const liveFileMap = new Map();
-      for (const fp of livePaths) {
-        try {
-          const content = await fs.readFile(path.join(repoDir, fp), 'utf8');
-          liveFileMap.set(fp, content);
-        } catch {
-          appendLog(logParts, `Could not read ${fp} for live-scan fix pass`);
-        }
-      }
-
-      let livePatched = applyFixesToFiles(liveFileMap, liveRows, {
-        allowAnnotation: false,
-        removeLines: true,
-      }).files;
-      livePatched = polishFileMapUntilStable(livePatched, logParts, appendLog, baselineMetrics);
-
-      for (const [fp, content] of livePatched.entries()) {
-        if (liveFileMap.get(fp) !== content) {
-          patched.set(fp, content);
-        }
-      }
-      anyChange = [...patched.entries()].some(([fp, c]) => fileMap.get(fp) !== c);
-    }
-
-    if (!anyChange) {
+    if (applied.length === 0) {
       const summary = skipped.length
         ? skipped.map((s) => `${s.filePath}: ${s.note}`).join('; ')
         : 'No matching fix rules for the reported issues';
@@ -314,26 +228,6 @@ async function runRemediation({ reportId, userId, repoFullName }) {
         appendLog(logParts, `Patched ${fp}`);
       }
     }
-
-    const afterLocalScan = await scanRepoDirectory(repoDir);
-    if (isRegressionAgainstBaseline(baselineMetrics.count, baselineMetrics.score, afterLocalScan)) {
-      appendLog(
-        logParts,
-        `Push blocked: after fixes the repo would show ${afterLocalScan.count} issue(s) and score ${afterLocalScan.score} — not better than ${baselineMetrics.count} issue(s) and score ${baselineMetrics.score ?? '—'}. Nothing was pushed.`
-      );
-      await updateRemediationStatus(reportId, 'failed', {
-        remediation_log: logParts.join('\n'),
-      });
-      throw new Error(
-        `Push blocked: automatic fixes would not improve this report (${afterLocalScan.count} issues vs ${baselineMetrics.count} before, score ${afterLocalScan.score} vs ${baselineMetrics.score ?? '—'}). Fix remaining items manually or adjust the code, then try again.`
-      );
-    }
-
-    appendLog(
-      logParts,
-      `Pre-push check passed: ${afterLocalScan.count} issue(s), score ${afterLocalScan.score} (baseline ${baselineMetrics.count} / ${baselineMetrics.score ?? '—'})`
-    );
-
     await updateRemediationStatus(reportId, 'validating', {
       remediation_log: logParts.join('\n'),
     });
@@ -364,28 +258,16 @@ async function runRemediation({ reportId, userId, repoFullName }) {
       throw pushErr;
     }
     const head = await repoGit.revparse(['HEAD']);
-    const pushCommitSha = head.trim();
-    appendLog(logParts, `Pushed to origin/${branch} (${pushCommitSha.slice(0, 7)})`);
-
-    await queueReanalysisAfterRemediationPush({
-      reportId,
-      repositoryId: report.repository_id,
-      userId,
-      repoFullName,
-      pushCommitSha,
-      branch,
-      logParts,
-      appendLog,
-    });
+    appendLog(logParts, `Pushed to origin/${branch} (${head.slice(0, 7)})`);
 
     await updateRemediationStatus(reportId, 'pushed', {
       remediation_log: logParts.join('\n'),
-      push_commit_sha: pushCommitSha,
+      push_commit_sha: head.trim(),
       pushed_at: new Date().toISOString(),
     });
 
-    logger.info('Remediation completed', { reportId, branch, commit: pushCommitSha.slice(0, 7) });
-    return { commitSha: pushCommitSha, branch, appliedCount: applied.length };
+    logger.info('Remediation completed', { reportId, branch, commit: head.slice(0, 7) });
+    return { commitSha: head.trim(), branch, appliedCount: applied.length };
   } catch (err) {
     appendLog(logParts, `Remediation error: ${err.message}`);
     await updateRemediationStatus(reportId, 'failed', {

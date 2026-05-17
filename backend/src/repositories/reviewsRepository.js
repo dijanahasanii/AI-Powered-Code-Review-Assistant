@@ -17,15 +17,6 @@ async function findReviewForRepoCommit(repositoryId, commitSha) {
     .single();
 }
 
-async function findReviewForRepoCommitMaybe(repositoryId, commitSha) {
-  return supabase
-    .from('code_reviews')
-    .select('id, status, repository_id, commit_sha, branch, overall_score, summary, completed_at')
-    .eq('repository_id', repositoryId)
-    .eq('commit_sha', commitSha)
-    .maybeSingle();
-}
-
 async function deleteReviewIssuesByReviewId(reviewId) {
   return supabase.from('review_issues').delete().eq('review_id', reviewId);
 }
@@ -145,7 +136,6 @@ async function deleteCodeReviewsByRepositoryId(repositoryId) {
 
 module.exports = {
   findReviewForRepoCommit,
-  findReviewForRepoCommitMaybe,
   deleteReviewIssuesByReviewId,
   deleteReviewFileStatsByReviewId,
   updateCodeReviewById,

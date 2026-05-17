@@ -32,7 +32,7 @@ export function ReportDetailHeader({
 
   const remediationNote =
     report.remediation_status === 'pushed'
-      ? 'Fixes were pushed to GitHub. A new scan runs automatically so you can see an updated score (see banner below).'
+      ? 'Fixes were committed and pushed to the analyzed branch.'
       : ['running', 'validating', 'confirmed'].includes(report.remediation_status)
         ? 'Remediation is running — this page refreshes automatically.'
         : null;

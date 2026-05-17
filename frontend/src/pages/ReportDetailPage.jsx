@@ -1,4 +1,4 @@
-﻿import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft } from 'lucide-react';
@@ -12,7 +12,6 @@ import { ReportDetailHeader } from '../features/reports/components/ReportDetailH
 import { ReportSummaryCard } from '../features/reports/components/ReportSummaryCard';
 import { ReportMarkdownAudit } from '../features/reports/components/ReportMarkdownAudit';
 import { ReportRemediationLog } from '../features/reports/components/ReportRemediationLog';
-import { PostRemediationUpdateBanner } from '../features/reports/components/PostRemediationUpdateBanner';
 import { AnalysisFindingsPanel } from '../features/reviews/components/AnalysisFindingsPanel';
 import { SEVERITY_ORDER, bucketCategory } from '../features/reviews/analysisConstants';
 
@@ -34,12 +33,9 @@ export default function ReportDetailPage() {
     staleTime: 0,
     refetchOnWindowFocus: true,
     refetchInterval: (query) => {
-      const data = query.state.data;
-      const status = data?.remediation_status;
-      const followStatus = data?.followUp?.status;
+      const status = query.state.data?.remediation_status;
       if (remediationWatch) return 2000;
       if (status && ACTIVE_REMEDIATION_STATUSES.has(status) && status !== 'pending') return 3000;
-      if (status === 'pushed' && ['pending', 'processing'].includes(followStatus)) return 3000;
       return false;
     },
   });
@@ -67,27 +63,10 @@ export default function ReportDetailPage() {
     enabled: Boolean(id) && Boolean(report),
   });
 
-  const rescanMutation = useMutation({
-    mutationFn: () => reportsApi.rescanAfterFix(id),
-    onSuccess: async () => {
-      toast.success('Re-scan started', 'We are analyzing your fixed code on GitHub.');
-      await queryClient.invalidateQueries({ queryKey: queryKeys.reportDetail(id) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.reviewsAll });
-      queryClient.invalidateQueries({ queryKey: queryKeys.reportsAll });
-    },
-    onError: (err) => {
-      const { title, detail } = describeApiFailure(err, { resourceLabel: 're-scan' });
-      toast.error(title, detail);
-    },
-  });
-
   const confirmMutation = useMutation({
     mutationFn: () => reportsApi.confirmRemediation(id),
     onSuccess: async () => {
-      toast.success(
-        'Remediation queued',
-        'Fixes will run after validation. If GitHub is already clean, we only refresh the report.'
-      );
+      toast.success('Remediation queued', 'Fixes will run after validation on the analyzed branch.');
       setConfirmOpen(false);
       setRemediationWatch(true);
       await queryClient.invalidateQueries({ queryKey: queryKeys.reportDetail(id) });
@@ -146,8 +125,6 @@ export default function ReportDetailPage() {
         `Issues in report: ${report.issue_count}`,
         '',
         'Files will be modified, validated (lint/build/test when available), committed, and pushed to the same branch. This cannot be undone automatically.',
-        '',
-        'Apply fixes runs several automatic passes (console, secrets, SQL, blocking fs, etc.). Complex cases may still need manual edits.',
       ].join('\n')
     : '';
 
@@ -188,21 +165,6 @@ export default function ReportDetailPage() {
         canApplyFixes={canApplyFixes}
         onApplyFixes={() => setConfirmOpen(true)}
       />
-
-      {report.remediation_status === 'pushed' && (
-        <PostRemediationUpdateBanner
-          followUp={report.followUp}
-          rescanPending={rescanMutation.isPending}
-          onRescan={() => rescanMutation.mutate()}
-        />
-      )}
-
-      {report.remediation_status === 'pushed' && (
-        <p className="mb-6 text-sm text-desk-muted">
-          The score and findings below are from <strong className="font-medium text-gray-800 dark:text-gray-200">before</strong>{' '}
-          fixes were pushed. Use the banner above for updated results.
-        </p>
-      )}
 
       {report.remediation_status === 'failed' && (
         <div

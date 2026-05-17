@@ -10,7 +10,7 @@ describe('targetedFixService', () => {
       suggestion: 'Remove console.log',
     });
     expect(result.applied).toBe(true);
-    expect(result.content).not.toContain('console.log');
+    expect(result.content).toContain('// [ai-fix]');
   });
 
   it('applies fixes per file without rewriting unrelated files', () => {
@@ -56,15 +56,16 @@ describe('targetedFixService', () => {
     expect(result.content).toContain('process.env.API_KEY');
   });
 
-  it('replaces var with const', () => {
-    const content = 'var count = 0;\n';
-    const result = applyIssueFix(
-      content,
-      { line_number: 1, title: 'Uses var', matched_rule: 'var_keyword::' },
-      { allowAnnotation: false }
-    );
+  it('adds guidance comment when no pattern fix matches', () => {
+    const content = 'export function load() {\n  return fetch(url);\n}\n';
+    const result = applyIssueFix(content, {
+      line_number: 2,
+      title: 'Missing error handling',
+      category: 'bug',
+      suggestion: 'Use try/catch around await.',
+    });
     expect(result.applied).toBe(true);
-    expect(result.content).toContain('const count');
+    expect(result.content).toContain('[ai-review]');
   });
 
   it('wraps async handler in try/catch for async_flow_no_catch style issues', () => {

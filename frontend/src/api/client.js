@@ -73,7 +73,6 @@ export const reportsApi = {
   getOne: (id, config) => api.get(`/api/reports/${id}`, config),
   getMarkdown: (id) => api.get(`/api/reports/${id}/markdown`),
   confirmRemediation: (id) => api.post(`/api/reports/${id}/confirm-remediation`),
-  rescanAfterFix: (id) => api.post(`/api/reports/${id}/rescan-after-fix`),
 };
 
 export default api;

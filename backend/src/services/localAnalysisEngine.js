@@ -2,7 +2,6 @@
 
 const { logger } = require('../utils/logger');
 const { iterateAddedLines, clipSnippet } = require('../lib/diffParseUtils');
-const { isRemediationNoiseLine } = require('../lib/remediationMarkers');
 const { SECRET_SHAPE: SECRET_REGEX } = require('../lib/secretRegex');
 
 /**
@@ -156,8 +155,6 @@ async function analyzeCode(diffText, repoContext = {}) {
 
   for (const row of added) {
     const { filePath, lineNumber: ln, text: t } = row;
-    if (isRemediationNoiseLine(t)) continue;
-
     const snippet = clipSnippet(t);
 
     if (RULE.CONSOLE_LOG.test(t)) {

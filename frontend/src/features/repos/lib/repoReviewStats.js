@@ -11,9 +11,6 @@ export function getCompletedReviewsNewestFirst(repo) {
     });
 }
 
-/**
- * Derived health strip for repo cards (webhook + latest score heuristic).
- */
 export function repoHealthStatus(repo) {
   const completedReviews = getCompletedReviewsNewestFirst(repo);
   const latestScore = completedReviews[0]?.overall_score;

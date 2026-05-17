@@ -94,7 +94,6 @@ CREATE TABLE IF NOT EXISTS analysis_reports (
   remediation_log     TEXT,
   push_commit_sha     VARCHAR(40),
   pushed_at           TIMESTAMPTZ,
-  follow_up_review_id UUID REFERENCES code_reviews(id) ON DELETE SET NULL,
   created_at          TIMESTAMPTZ DEFAULT NOW(),
   updated_at          TIMESTAMPTZ DEFAULT NOW()
 );
