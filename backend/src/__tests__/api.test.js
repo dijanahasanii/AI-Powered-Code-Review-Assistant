@@ -1,7 +1,7 @@
 // ── Tests: Auth Middleware ────────────────────────────────────────────────────
 const request = require('supertest');
 const jwt = require('jsonwebtoken');
-const { app } = require('../server');
+const { app, closeHttpServer } = require('../server');
 
 // Mock Supabase so tests don't hit real DB
 jest.mock('../config/database', () => ({
@@ -167,4 +167,8 @@ describe('Webhook signature verification', () => {
       .send(body);
     expect(res.status).toBe(200);
   });
+});
+
+afterAll(async () => {
+  await closeHttpServer();
 });

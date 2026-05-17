@@ -5,5 +5,4 @@ module.exports = {
   collectCoverageFrom: ['src/**/*.js', '!src/__tests__/**', '!src/config/migrate.js'],
   coverageReporters: ['text', 'lcov'],
   clearMocks: true,
-  globalTeardown: './src/__tests__/globalTeardown.js',
 };
