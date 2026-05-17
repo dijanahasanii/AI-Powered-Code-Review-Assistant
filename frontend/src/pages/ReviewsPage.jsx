@@ -10,6 +10,7 @@ import { useAuth } from '../context/AuthContext';
 import { ScoreRing, StatusBadge, EmptyState, PageHeader } from '../components/common/UI';
 import { ReviewCardSkeleton } from '../components/common/Skeletons';
 import { queryKeys } from '../lib/queryKeys';
+import { ReviewLatestToolbar } from '../features/reviews/components/ReviewLatestToolbar';
 
 const STATUS_FILTERS = ['all', 'completed', 'processing', 'pending', 'failed'];
 const LIMIT = 15;
@@ -41,7 +42,7 @@ export default function ReviewsPage() {
   const emptyDescription =
     status !== 'all'
       ? `No ${status} reviews. Try a different filter or trigger a manual run from Repositories.`
-      : 'Push code to a connected repository or use “Review latest” on Repositories to pick a branch.';
+      : 'Push code to a connected repository or use Review latest above to scan the newest commit on a branch.';
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
@@ -54,6 +55,8 @@ export default function ReviewsPage() {
             : 'Use filters to narrow queued and completed runs by status.'
         }
       />
+
+      <ReviewLatestToolbar />
 
       <div className="mb-6 inline-flex flex-wrap gap-1 rounded-md border border-desk-border bg-desk-panel p-1" role="group" aria-label="Filter by status">
         {STATUS_FILTERS.map((s) => (

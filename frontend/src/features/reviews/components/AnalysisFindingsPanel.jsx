@@ -10,7 +10,13 @@ import {
 } from '../analysisConstants';
 import { CategoryAccordion } from './CategoryAccordion';
 
-export function AnalysisFindingsPanel({ sortedIssues, byBucket, reviewStatus, variant = 'review' }) {
+export function AnalysisFindingsPanel({
+  sortedIssues,
+  byBucket,
+  reviewStatus,
+  variant = 'review',
+  beforeFix = false,
+}) {
   const rollups = useMemo(() => {
     if (!sortedIssues.length) return null;
     const bySev = { critical: 0, warning: 0, info: 0, suggestion: 0 };
@@ -69,10 +75,12 @@ export function AnalysisFindingsPanel({ sortedIssues, byBucket, reviewStatus, va
               id="report-findings-heading"
               className="text-sm font-semibold uppercase tracking-wider text-desk-muted"
             >
-              Findings
+              {beforeFix ? 'Findings (before fix)' : 'Findings'}
             </h2>
             <p className="mt-1 text-sm text-desk-muted">
-              Expand a category to inspect individual issues, snippets, and file locations.
+              {beforeFix
+                ? 'These issues were found before fixes were pushed — they are not updated on this page.'
+                : 'Expand a category to inspect individual issues, snippets, and file locations.'}
             </p>
           </div>
           <div className="flex flex-wrap gap-2" aria-label="Jump to category by severity">

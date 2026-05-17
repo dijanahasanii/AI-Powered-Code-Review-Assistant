@@ -30,12 +30,9 @@ export function ReportDetailHeader({
     ? format(new Date(report.created_at), "MMM d, yyyy · HH:mm")
     : null;
 
-  const remediationNote =
-    report.remediation_status === 'pushed'
-      ? 'Fixes were committed and pushed to the analyzed branch.'
-      : ['running', 'validating', 'confirmed'].includes(report.remediation_status)
-        ? 'Remediation is running — this page refreshes automatically.'
-        : null;
+  const remediationNote = ['running', 'validating', 'confirmed'].includes(report.remediation_status)
+    ? 'Remediation is running — this page refreshes automatically.'
+    : null;
 
   return (
     <header className="card mb-8 overflow-hidden p-0">

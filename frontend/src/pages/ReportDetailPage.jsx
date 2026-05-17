@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+﻿import { useState, useMemo, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft } from 'lucide-react';
@@ -9,6 +9,7 @@ import ConfirmDialog from '../components/common/ConfirmDialog';
 import { queryKeys } from '../lib/queryKeys';
 import { useToast } from '../components/common/Toast';
 import { ReportDetailHeader } from '../features/reports/components/ReportDetailHeader';
+import { ReportAfterPushBanner } from '../features/reports/components/ReportAfterPushBanner';
 import { ReportSummaryCard } from '../features/reports/components/ReportSummaryCard';
 import { ReportMarkdownAudit } from '../features/reports/components/ReportMarkdownAudit';
 import { ReportRemediationLog } from '../features/reports/components/ReportRemediationLog';
@@ -166,6 +167,8 @@ export default function ReportDetailPage() {
         onApplyFixes={() => setConfirmOpen(true)}
       />
 
+      <ReportAfterPushBanner report={report} />
+
       {report.remediation_status === 'failed' && (
         <div
           className="mb-8 rounded-xl border border-red-500/30 bg-red-500/[0.08] px-4 py-3 sm:px-5"
@@ -204,11 +207,19 @@ export default function ReportDetailPage() {
             byBucket={byBucket}
             reviewStatus="completed"
             variant="report"
+            beforeFix={report.remediation_status === 'pushed'}
           />
         ) : report.issue_count > 0 ? (
-          <p className="text-center text-sm text-desk-muted">
-            Findings are listed in the persisted report file below.
-          </p>
+          <div className="space-y-2">
+            {report.remediation_status === 'pushed' && (
+              <p className="text-sm font-medium text-desk-muted">
+                Before fix — detailed findings are in the persisted report file below.
+              </p>
+            )}
+            <p className="text-center text-sm text-desk-muted">
+              Findings are listed in the persisted report file below.
+            </p>
+          </div>
         ) : null}
       </main>
 
