@@ -83,6 +83,20 @@ async function listReportPathsByRepositoryId(repositoryId) {
     .eq('repository_id', repositoryId);
 }
 
+/**
+ * Lightweight rows for dashboard severity aggregation (avoids loading every review_issues row).
+ * @param {string[]} repositoryIds
+ */
+async function listSeveritySummariesForRepos(repositoryIds) {
+  if (!repositoryIds.length) {
+    return { data: [], error: null };
+  }
+  return supabase
+    .from('analysis_reports')
+    .select('severity_summary')
+    .in('repository_id', repositoryIds);
+}
+
 async function deleteByRepositoryId(repositoryId) {
   return supabase.from('analysis_reports').delete().eq('repository_id', repositoryId);
 }
@@ -95,5 +109,6 @@ module.exports = {
   getReportWithRepo,
   updateReportById,
   listReportPathsByRepositoryId,
+  listSeveritySummariesForRepos,
   deleteByRepositoryId,
 };

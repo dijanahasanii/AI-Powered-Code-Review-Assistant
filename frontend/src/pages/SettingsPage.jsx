@@ -22,7 +22,7 @@ import { useUiPreferences } from '../context/UiPreferencesContext';
 import { Avatar, PageHeader } from '../components/common/UI';
 
 export default function SettingsPage() {
-  const { user, logout } = useAuth();
+  const { user, logout, switchGithubAccount } = useAuth();
   const navigate = useNavigate();
   const { connected } = useSocket();
   const { density, setDensity, theme, setTheme, resolvedTheme } = useUiPreferences();
@@ -88,14 +88,19 @@ export default function SettingsPage() {
                   <p className="mt-1 text-[13px] text-desk-muted">OAuth login via backend — no password stored.</p>
                 </div>
               </div>
-              <button
-                type="button"
-                className="btn-secondary border border-desk-border hover:border-red-500/35 hover:bg-red-500/10 hover:text-red-300"
-                onClick={handleLogout}
-              >
-                <LogOut size={16} aria-hidden="true" />
-                Sign out
-              </button>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <button type="button" className="btn-secondary" onClick={switchGithubAccount}>
+                  Switch GitHub account
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary border border-desk-border hover:border-red-500/35 hover:bg-red-500/10 hover:text-red-300"
+                  onClick={handleLogout}
+                >
+                  <LogOut size={16} aria-hidden="true" />
+                  Sign out
+                </button>
+              </div>
             </div>
             <div className="p-5">
               <a

@@ -9,11 +9,13 @@ const {
   triggerLatestReview,
   retryPendingAnalyze,
   getStats,
+  getDashboardBundle,
 } = require('../controllers/reviewsController');
 
 router.use(authenticate);
 router.get('/', listReviews);
 router.get('/stats', getStats);
+router.get('/dashboard', getDashboardBundle);
 
 router.post('/retry/:id', [param('id').isUUID()], retryPendingAnalyze);
 

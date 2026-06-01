@@ -132,6 +132,31 @@ const getStats = async (req, res, next) => {
 };
 
 /**
+ * GET /api/reviews/dashboard — stats + recent activity in one round trip (faster dashboard load).
+ */
+const getDashboardBundle = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const [stats, reviewsResult] = await Promise.all([
+      getDashboardReviewStats(userId),
+      reviewsRepository.listReviewsForUser({ userId, from: 0, to: 7 }),
+    ]);
+
+    if (reviewsResult.error) throw new AppError('Failed to fetch reviews', 500);
+
+    res.json({
+      success: true,
+      data: {
+        stats,
+        recentReviews: reviewsResult.data ?? [],
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
  * POST /api/reviews/retry/:id — re-queue pending or retry after failed (same row)
  */
 const retryPendingAnalyze = async (req, res, next) => {
@@ -153,4 +178,5 @@ module.exports = {
   triggerLatestReview,
   retryPendingAnalyze,
   getStats,
+  getDashboardBundle,
 };

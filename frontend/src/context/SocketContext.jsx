@@ -43,7 +43,7 @@ export const SocketProvider = ({ children }) => {
 
     const socket = io(getPublicSocketBaseUrl(), {
       withCredentials: true,
-      transports: ['polling', 'websocket'],
+      transports: ['websocket', 'polling'],
       reconnection: true,
       reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,

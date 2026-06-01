@@ -116,13 +116,74 @@ async function listReviewsForStats(repositoryIds) {
   }
   return supabase
     .from('code_reviews')
-    .select('id, status, overall_score')
-    .in('repository_id', repositoryIds);
+    .select('id, status, overall_score, created_at')
+    .in('repository_id', repositoryIds)
+    .order('created_at', { ascending: false });
+}
+
+/**
+ * Fast dashboard counters — head counts + capped score sample (no full review table scan in app memory).
+ * @param {string[]} repositoryIds
+ */
+async function countReviewsForRepos(repositoryIds) {
+  if (!repositoryIds.length) {
+    return { data: { total: 0, completed: 0, pending: 0, processing: 0, avgScore: null }, error: null };
+  }
+
+  const base = () => supabase.from('code_reviews').select('id', { count: 'exact', head: true }).in('repository_id', repositoryIds);
+
+  const [totalRes, completedRes, pendingRes, processingRes, scoresRes] = await Promise.all([
+    base(),
+    base().eq('status', 'completed'),
+    base().eq('status', 'pending'),
+    base().eq('status', 'processing'),
+    supabase
+      .from('code_reviews')
+      .select('overall_score')
+      .in('repository_id', repositoryIds)
+      .eq('status', 'completed')
+      .not('overall_score', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(250),
+  ]);
+
+  const firstErr = totalRes.error || completedRes.error || pendingRes.error || processingRes.error || scoresRes.error;
+  if (firstErr) return { data: null, error: firstErr };
+
+  const scores = scoresRes.data || [];
+  const avgScore =
+    scores.length > 0
+      ? Math.round(scores.reduce((sum, r) => sum + Number(r.overall_score), 0) / scores.length)
+      : null;
+
+  return {
+    data: {
+      total: totalRes.count ?? 0,
+      completed: completedRes.count ?? 0,
+      pending: pendingRes.count ?? 0,
+      processing: processingRes.count ?? 0,
+      avgScore,
+    },
+    error: null,
+  };
 }
 
 /**
  * @param {string[]} reviewIds
  */
+async function listRecentCompletedReviewIds(repositoryIds, limit = 150) {
+  if (!repositoryIds.length) {
+    return { data: [], error: null };
+  }
+  return supabase
+    .from('code_reviews')
+    .select('id')
+    .in('repository_id', repositoryIds)
+    .eq('status', 'completed')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+}
+
 async function listIssueSeveritiesForReviews(reviewIds) {
   if (!reviewIds.length) {
     return { data: [], error: null };
@@ -145,6 +206,8 @@ module.exports = {
   getReviewWithRelations,
   getReviewSummaryForRetry,
   listReviewsForStats,
+  countReviewsForRepos,
+  listRecentCompletedReviewIds,
   listIssueSeveritiesForReviews,
   deleteCodeReviewsByRepositoryId,
 };

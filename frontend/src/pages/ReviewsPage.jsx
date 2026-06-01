@@ -19,11 +19,24 @@ export default function ReviewsPage() {
   const [status, setStatus] = useState('all');
   const [page, setPage] = useState(1);
 
-  const { data, isPending, isPlaceholderData, isError, error, refetch } = useQuery({
+  const { data, isPending, isFetching, isError, error, refetch } = useQuery({
     queryKey: queryKeys.reviewsList({ status, page, limit: LIMIT }),
     queryFn: () =>
       reviewsApi.list({ ...(status !== 'all' && { status }), page, limit: LIMIT }).then((r) => r.data),
-    placeholderData: (prev) => prev,
+    staleTime: 15_000,
+    refetchOnMount: 'always',
+    placeholderData: (prev, prevQuery) => {
+      const prevKey = prevQuery?.queryKey;
+      const nextKey = queryKeys.reviewsList({ status, page, limit: LIMIT });
+      if (
+        prevKey?.[0] === nextKey[0] &&
+        prevKey?.[1]?.page === nextKey[1]?.page &&
+        prevKey?.[1]?.status === nextKey[1]?.status
+      ) {
+        return prev;
+      }
+      return undefined;
+    },
   });
 
   const reviews = data?.data ?? [];
@@ -110,7 +123,7 @@ export default function ReviewsPage() {
           <div
             className={clsx(
               'max-h-none overflow-visible lg:max-h-[min(32rem,calc(100vh-14rem))] lg:overflow-y-auto lg:overscroll-contain lg:pr-1',
-              isPlaceholderData ? 'opacity-70' : '',
+              isFetching && data ? 'opacity-70' : '',
               'transition-opacity'
             )}
           >

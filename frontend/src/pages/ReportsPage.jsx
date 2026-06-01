@@ -1,5 +1,6 @@
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useState, useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useSocket } from '../context/SocketContext';
 import { Link } from 'react-router-dom';
 import { FileText, ChevronLeft, ChevronRight } from 'lucide-react';
 import { reportsApi } from '../api/client';
@@ -13,12 +14,26 @@ const LIMIT = 15;
 
 export default function ReportsPage() {
   const [page, setPage] = useState(1);
+  const queryClient = useQueryClient();
+  const { connected, onReviewUpdate } = useSocket();
+  const pollMs = connected ? 30_000 : 15_000;
 
   const { data, isPending, isError, error, refetch } = useQuery({
     queryKey: queryKeys.reportsList({ page, limit: LIMIT }),
     queryFn: () => reportsApi.list({ page, limit: LIMIT }).then((r) => r.data),
+    staleTime: 15_000,
     refetchOnMount: 'always',
+    refetchInterval: pollMs,
+    refetchIntervalInBackground: false,
   });
+
+  useEffect(() => {
+    return onReviewUpdate((update) => {
+      if (update?.status === 'completed') {
+        queryClient.invalidateQueries({ queryKey: queryKeys.reportsAll });
+      }
+    });
+  }, [onReviewUpdate, queryClient]);
 
   const reports = data?.data ?? [];
   const total = data?.pagination?.total ?? 0;

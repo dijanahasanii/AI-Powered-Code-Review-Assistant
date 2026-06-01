@@ -15,6 +15,7 @@ import { ReportMarkdownAudit } from '../features/reports/components/ReportMarkdo
 import { ReportRemediationLog } from '../features/reports/components/ReportRemediationLog';
 import { AnalysisFindingsPanel } from '../features/reviews/components/AnalysisFindingsPanel';
 import { SEVERITY_ORDER, bucketCategory } from '../features/reviews/analysisConstants';
+import { filterActiveReviewIssues } from '../lib/issueLifecycle';
 
 const ACTIVE_REMEDIATION_STATUSES = new Set(['confirmed', 'running', 'validating', 'pending']);
 
@@ -80,7 +81,10 @@ export default function ReportDetailPage() {
     },
   });
 
-  const issues = useMemo(() => reviewQuery.data?.review_issues ?? [], [reviewQuery.data]);
+  const issues = useMemo(
+    () => filterActiveReviewIssues(reviewQuery.data?.review_issues ?? []),
+    [reviewQuery.data]
+  );
 
   const sortedIssues = useMemo(
     () =>

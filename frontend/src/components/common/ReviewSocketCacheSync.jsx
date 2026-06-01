@@ -1,21 +1,16 @@
 import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSocket } from '../../context/SocketContext';
-import { queryKeys } from '../../lib/queryKeys';
+import { applyReviewUpdateToCaches } from '../../lib/socketQuerySync';
 
-/** Invalidate React Query caches when Socket.IO emits review:update. */
+/** Socket-driven cache updates for dashboard, reviews, and reports lists. */
 export function ReviewSocketCacheSync() {
   const queryClient = useQueryClient();
   const { onReviewUpdate } = useSocket();
 
   useEffect(() => {
     return onReviewUpdate((update) => {
-      const status = update?.status;
-      queryClient.invalidateQueries({ queryKey: queryKeys.reviewsAll });
-      queryClient.invalidateQueries({ queryKey: queryKeys.stats });
-      if (status === 'completed' || status === 'failed') {
-        queryClient.invalidateQueries({ queryKey: queryKeys.reportsAll });
-      }
+      applyReviewUpdateToCaches(queryClient, update);
     });
   }, [onReviewUpdate, queryClient]);
 

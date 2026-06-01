@@ -162,17 +162,41 @@ export const ScoreRing = ({ score, size = 64 }) => {
 };
 
 // ── Page header ───────────────────────────────────────────────────────────────
-export const PageHeader = ({ title, description, hint, action }) => (
-  <div className="mb-10 flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+export const PageHeader = ({ title, description, hint, action, compact = false }) => (
+  <div
+    className={clsx(
+      'flex flex-col sm:flex-row sm:items-start sm:justify-between',
+      compact ? 'mb-6 gap-3' : 'mb-10 gap-5'
+    )}
+  >
     <div className="min-w-0">
-      <h1 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-gray-50 sm:text-[1.65rem] sm:leading-snug">
+      <h1
+        className={clsx(
+          'font-bold tracking-tight text-gray-900 dark:text-gray-50',
+          compact ? 'text-xl leading-snug' : 'text-2xl sm:text-[1.65rem] sm:leading-snug'
+        )}
+      >
         {title}
       </h1>
       {description && (
-        <p className="mt-2 max-w-2xl text-[15px] leading-relaxed text-desk-muted md:text-[0.9375rem]">{description}</p>
+        <p
+          className={clsx(
+            'max-w-2xl text-desk-muted',
+            compact ? 'mt-1.5 text-[13px] leading-snug' : 'mt-2 text-[15px] leading-relaxed md:text-[0.9375rem]'
+          )}
+        >
+          {description}
+        </p>
       )}
       {hint && (
-        <p className="mt-2 max-w-2xl text-[13px] leading-snug text-desk-muted">{hint}</p>
+        <p
+          className={clsx(
+            'max-w-2xl text-desk-muted',
+            compact ? 'mt-1 text-xs leading-snug' : 'mt-2 text-[13px] leading-snug'
+          )}
+        >
+          {hint}
+        </p>
       )}
     </div>
     {action && <div className="shrink-0">{action}</div>}

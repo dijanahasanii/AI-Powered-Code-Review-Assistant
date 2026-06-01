@@ -4,7 +4,7 @@
 
 Textual flow (happy path):
 
-1. User clicks login on the SPA → browser goes to **`{API}/api/auth/github`** → **302** to **`https://github.com/login/oauth/authorize?...&state=...`** (`LoginPage.jsx`).
+1. User clicks login on the SPA → browser goes to **`{API}/api/auth/github`** (or **`?switch_account=1`** to clear the app cookie and add **`prompt=select_account`** for GitHub’s account picker) → **302** to **`https://github.com/login/oauth/authorize?...&state=...`** (`LoginPage.jsx`).
 2. GitHub redirects to **`{SPA}/auth/callback?code=…&state=…`**.
 3. **`CallbackPage.jsx`** calls **`authApi.githubCallback(code, state)`** → **`GET /api/auth/github/callback`** with `redirect_uri` matching the SPA callback URL.
 4. Backend verifies **`state`**, exchanges the code with GitHub, upserts the user, returns **JSON** with app **JWT** + user profile (`authController.js`).

@@ -114,6 +114,10 @@ function RealtimeUpdatesBanner() {
 function WorkspaceChromeBar() {
   const crumbs = useWorkspaceBreadcrumbs();
   const { pathname } = useLocation();
+
+  // Dashboard title lives in-page; skip duplicate breadcrumb strip to save vertical space.
+  if (pathname === '/dashboard') return null;
+
   const suffix = pathname.startsWith('/reviews/')
     ? pathname.split('/').pop()?.slice(0, 8) ?? ''
     : '';

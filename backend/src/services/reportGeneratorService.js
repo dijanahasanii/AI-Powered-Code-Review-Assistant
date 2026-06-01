@@ -269,7 +269,10 @@ async function loadReviewIssues(reviewId) {
     .eq('review_id', reviewId)
     .order('severity', { ascending: true });
   if (error) throw new Error(`loadReviewIssues: ${error.message}`);
-  return data || [];
+  return (data || []).filter((row) => {
+    const ls = row.lifecycle_status;
+    return !ls || ls === 'open' || ls === 'reopened';
+  });
 }
 
 function mapIssueRow(row) {

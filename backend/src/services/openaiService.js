@@ -9,6 +9,7 @@ const { logger } = require('../utils/logger');
 const { analyzeRepositorySnapshot } = require('./repositoryAnalyzer');
 const { analyzeCode: runLocalAnalysis } = require('./localAnalysisEngine');
 const { augmentAnalysisFromDiff } = require('./diffHeuristicAudit');
+const { isSnapshotMetaComplete } = require('../analyzers/analysisScanCompleteness');
 
 async function analyzeCode(diffText, repoContext = {}) {
   const { repoName: repoFullName, userId, commitSha, language } = repoContext || {};
@@ -26,11 +27,14 @@ async function analyzeCode(diffText, repoContext = {}) {
       if (snap.snapshotMeta?.treeTruncated) {
         summary += ' GitHub tree response was truncated — only part of the repository was enumerated.';
       }
+      const scanComplete = isSnapshotMetaComplete(snap.snapshotMeta);
       return {
         summary,
         overallScore: snap.overallScore,
         issues: snap.issues,
         positives: snap.positives,
+        scanComplete,
+        snapshotMeta: snap.snapshotMeta,
       };
     } catch (e) {
       logger.warn(`Snapshot repository analysis unavailable (${e.message}) — falling back to diff heuristics.`);
@@ -46,12 +50,13 @@ async function analyzeCode(diffText, repoContext = {}) {
       overallScore: null,
       issues: [],
       positives: [],
+      scanComplete: false,
     };
   }
 
   let raw = await runLocalAnalysis(diff, repoContext);
   raw = augmentAnalysisFromDiff(raw, diff);
-  return raw;
+  return { ...raw, scanComplete: false };
 }
 
 function getReviewAiRuntimeInfo() {

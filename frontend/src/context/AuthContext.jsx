@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { authApi } from '../api/client';
+import { githubOAuthStartUrl } from '../config/githubOAuth';
 
 const AuthContext = createContext(null);
 
@@ -47,14 +48,23 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   }, []);
 
+  const switchGithubAccount = useCallback(() => {
+    authApi.logout().catch(() => {
+      /* cookie clear is best-effort if API is down */
+    });
+    setUser(null);
+    window.location.href = githubOAuthStartUrl(true);
+  }, []);
+
   const value = useMemo(
     () => ({
       user,
       loading,
       login,
       logout,
+      switchGithubAccount,
     }),
-    [user, loading, login, logout]
+    [user, loading, login, logout, switchGithubAccount]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

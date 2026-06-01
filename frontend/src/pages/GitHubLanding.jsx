@@ -10,7 +10,7 @@ import { BrowserOfflineBar } from '../components/common/BrowserOfflineBar';
  * Home route: always the first screen (`/`). Shows GitHub connect or resume into the app.
  */
 export default function GitHubLanding() {
-  const { user, loading, logout } = useAuth();
+  const { user, loading, logout, switchGithubAccount } = useAuth();
   const navigate = useNavigate();
 
   if (loading) {
@@ -40,12 +40,20 @@ export default function GitHubLanding() {
 
           <button
             type="button"
+            onClick={switchGithubAccount}
+            className="btn-secondary w-full justify-center py-2 text-sm"
+          >
+            Use a different GitHub account
+          </button>
+
+          <button
+            type="button"
             onClick={() => {
               logout();
             }}
-            className="btn-secondary w-full justify-center py-2.5 text-sm"
+            className="w-full justify-center py-2 text-sm text-desk-muted transition-colors hover:text-gray-800 dark:hover:text-gray-200"
           >
-            Sign out
+            Sign out only
           </button>
         </div>
       </LandingShell>

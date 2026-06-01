@@ -15,9 +15,14 @@ export function ReviewHintBanner({ hint }) {
       )}
     >
       <p>{hint.text}</p>
-      <Link to="/reviews" className="mt-2 inline-block text-xs font-medium underline">
-        Jump to Reviews
-      </Link>
+      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
+        <Link to="/reviews" className="text-xs font-medium underline underline-offset-2">
+          Jump to Reviews
+        </Link>
+        <Link to="/reports" className="text-xs font-medium underline underline-offset-2">
+          Jump to AI Reports
+        </Link>
+      </div>
     </div>
   );
 }

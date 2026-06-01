@@ -14,6 +14,10 @@ import { GitHubRepoPicker } from '../features/repos/components/GitHubRepoPicker'
 import { ConnectedReposGrid } from '../features/repos/components/ConnectedReposGrid';
 import { NoConnectedReposHero } from '../features/repos/components/NoConnectedReposHero';
 import { queryKeys } from '../lib/queryKeys';
+import {
+  purgeReviewsForRepository,
+  refreshWorkspaceAfterRepositoryRemoved,
+} from '../lib/reviewCacheSync';
 
 export default function RepositoriesPage() {
   const { user } = useAuth();
@@ -66,6 +70,7 @@ export default function RepositoriesPage() {
     onMutate: (repo) => setConnectingId(repo.githubRepoId),
     onSuccess: (data, repo) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.repos });
+      void queryClient.refetchQueries({ queryKey: queryKeys.dashboardBundle, type: 'all' });
       toast.success(
         'Repository connected',
         `${repo.fullName} is linked. Webhooks fire on push when your callback URL and secret are valid.`
@@ -99,12 +104,8 @@ export default function RepositoriesPage() {
         return old.filter((r) => r.id !== id);
       });
 
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.reviewsAll, refetchType: 'none' }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.reportsAll }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.stats, refetchType: 'none' }),
-        queryClient.invalidateQueries({ queryKey: ['review'], refetchType: 'none' }),
-      ]);
+      purgeReviewsForRepository(queryClient, id);
+      await refreshWorkspaceAfterRepositoryRemoved(queryClient);
 
       toast.success('Disconnected', `${name} has been removed from review automation.`);
       setConfirmRepo(null);
@@ -171,9 +172,13 @@ export default function RepositoriesPage() {
       queryClient.invalidateQueries({ queryKey: queryKeys.reviewsAll });
       queryClient.invalidateQueries({ queryKey: queryKeys.reportsAll });
       queryClient.invalidateQueries({ queryKey: queryKeys.stats });
+      void queryClient.refetchQueries({ queryKey: queryKeys.dashboardBundle, type: 'all' });
 
       const branchNote = branch ? `branch ${branch}` : 'the default branch';
-      toast.success('Review started', `Queued on ${branchNote} — open Reviews to watch it run.`);
+      toast.success(
+        'Review started',
+        `Queued on ${branchNote} — watch Reviews; the AI Report appears when analysis completes.`
+      );
       const meta = res?.data?.meta || {};
       if (meta.duplicatePending) {
         setReviewHint({
@@ -184,12 +189,12 @@ export default function RepositoriesPage() {
       } else if (meta.reanalysis) {
         setReviewHint({
           tone: 'success',
-          text: 'Fresh analysis queued — open Reviews and click through to the detail view for findings.',
+          text: 'Fresh analysis queued — open Reviews for live status; open AI Reports when the run completes.',
         });
       } else {
         setReviewHint({
           tone: 'success',
-          text: `Queued on ${branch ? `branch ${branch}` : 'the default branch'}. Watch the Reviews list until status shows completed.`,
+          text: `Queued on ${branch ? `branch ${branch}` : 'the default branch'}. Watch Reviews until completed, then check AI Reports for the persisted audit.`,
         });
       }
     },

@@ -3,6 +3,7 @@
  */
 export const queryKeys = {
   stats: ['stats'],
+  dashboardBundle: ['dashboard-bundle'],
   repos: ['repos'],
   reposGithub: ['repos-github'],
   repoBranches: (id) => ['repo-branches', id],

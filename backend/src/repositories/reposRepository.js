@@ -34,7 +34,8 @@ async function listConnectedWithReviewsForUser(userId) {
     )
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
-    .order('created_at', { foreignTable: 'code_reviews', ascending: false });
+    .order('created_at', { foreignTable: 'code_reviews', ascending: false })
+    .limit(8, { foreignTable: 'code_reviews' });
 }
 
 /**

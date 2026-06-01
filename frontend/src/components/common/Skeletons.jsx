@@ -185,10 +185,10 @@ export function ReviewDetailSkeleton() {
   );
 }
 
-function PageHeaderSkeleton() {
+function PageHeaderSkeleton({ compact = false }) {
   return (
-    <div className="mb-10 space-y-3">
-      <Bone className="h-8 w-56 max-w-[90%] sm:h-9" />
+    <div className={compact ? 'mb-6 space-y-2' : 'mb-10 space-y-3'}>
+      <Bone className={compact ? 'h-7 w-48 max-w-[90%]' : 'h-8 w-56 max-w-[90%] sm:h-9'} />
       <Bone className="h-4 w-full max-w-2xl" />
       <Bone className="h-3.5 w-full max-w-xl" />
     </div>
@@ -197,8 +197,8 @@ function PageHeaderSkeleton() {
 
 export function DashboardPageSkeleton() {
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
-      <PageHeaderSkeleton />
+    <div className="mx-auto max-w-7xl px-4 pt-5 pb-5 sm:px-6 sm:pt-6 lg:px-8">
+      <PageHeaderSkeleton compact />
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
         {Array.from({ length: 3 }).map((_, i) => (
           <StatCardSkeleton key={`m-${i}`} />

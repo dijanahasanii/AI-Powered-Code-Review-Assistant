@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { lazy, Suspense, useDeferredValue, useEffect, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { safeDistanceToNow } from '../lib/safeDates';
@@ -10,15 +10,27 @@ import {
   Activity,
   GitCommit,
 } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import clsx from 'clsx';
-import { reviewsApi, reposApi } from '../api/client';
+import { reviewsApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import CollapsibleSection from '../components/common/CollapsibleSection';
 import { ScoreRing, StatusBadge, PageHeader } from '../components/common/UI';
 import { StatCardSkeleton, DashboardActivitySkeleton } from '../components/common/Skeletons';
 import { queryKeys } from '../lib/queryKeys';
+
+const DashboardFindingsChart = lazy(() =>
+  import('../features/dashboard/DashboardFindingsChart').then((m) => ({
+    default: m.DashboardFindingsChart,
+  }))
+);
+
+const buildChartData = (issues = {}) => [
+  { name: 'Critical', value: issues.critical || 0, color: '#f85149' },
+  { name: 'Warning', value: issues.warning || 0, color: '#d29922' },
+  { name: 'Info', value: issues.info || 0, color: '#58a6ff' },
+  { name: 'Suggest', value: issues.suggestion || 0, color: '#a371f7' },
+];
 
 const MetricCard = ({ icon: Icon, label, value, sub, subAccent }) => (
   <div className="card flex flex-col p-4 sm:p-5 card-interactive">
@@ -40,111 +52,53 @@ const MetricCard = ({ icon: Icon, label, value, sub, subAccent }) => (
   </div>
 );
 
-const ChartTooltip = ({ active, payload, label }) => {
-  if (!active || !payload?.length) return null;
-  return (
-    <div className="card border-desk-subtle px-3 py-2 text-xs shadow-xl">
-      <p className="text-desk-muted">{label}</p>
-      <p className="mt-0.5 font-semibold tabular-nums text-gray-900 dark:text-gray-50">
-        {payload[0].value} findings
-      </p>
-    </div>
-  );
-};
-
-const buildChartData = (issues = {}) => [
-  { name: 'Critical', value: issues.critical || 0, color: '#f85149' },
-  { name: 'Warning', value: issues.warning || 0, color: '#d29922' },
-  { name: 'Info', value: issues.info || 0, color: '#58a6ff' },
-  { name: 'Suggest', value: issues.suggestion || 0, color: '#a371f7' },
-];
-
-function findingsMixSummary(chartRows) {
-  const rows = chartRows ?? [];
-  const total = rows.reduce((s, r) => s + Number(r.value || 0), 0);
-  if (!total) return <>No findings in aggregated stats yet.</>;
-  const parts = rows.filter((r) => Number(r.value) > 0).map((r) => `${r.name} ${Number(r.value).toLocaleString()}`);
-  return (
-    <>
-      {total.toLocaleString()} total
-      {parts.length ? (
-        <>
-          <span aria-hidden="true"> · </span>
-          <span>{parts.join(' · ')}</span>
-        </>
-      ) : null}
-    </>
-  );
-}
-
 export default function DashboardPage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const { connected, onReviewUpdate } = useSocket();
 
-  const pollMs = connected ? false : 5000;
-
-  const { data: stats, isLoading: statsLoading, isError: statsError, refetch: refetchStats } = useQuery(
-    {
-      queryKey: queryKeys.stats,
-      queryFn: () => reviewsApi.getStats().then((r) => r.data.data),
-      refetchInterval: pollMs,
-    }
-  );
-
-  const { data: reposData, isLoading: reposLoading } = useQuery({
-    queryKey: queryKeys.repos,
-    queryFn: () => reposApi.list().then((r) => r.data.data ?? []),
-    refetchInterval: pollMs,
-    staleTime: 45_000,
-  });
+  /** Socket + light polling so metrics update even if one event is missed. */
+  const pollMs = connected ? 20_000 : 10_000;
 
   const {
-    data: reviewsData,
-    isLoading: reviewsLoading,
-    isError: reviewsError,
-    refetch: refetchReviews,
+    data: bundle,
+    isLoading,
+    isError: bundleError,
+    refetch: refetchBundle,
   } = useQuery({
-    queryKey: queryKeys.reviewsList({ page: 1, limit: 8 }),
-    queryFn: () => reviewsApi.list({ page: 1, limit: 8 }).then((r) => r.data),
+    queryKey: queryKeys.dashboardBundle,
+    queryFn: () => reviewsApi.getDashboard().then((r) => r.data.data),
+    staleTime: 10_000,
+    gcTime: 5 * 60_000,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
     refetchInterval: pollMs,
+    refetchIntervalInBackground: false,
   });
 
   useEffect(() => {
-    const unsub = onReviewUpdate((update) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.stats });
-      queryClient.invalidateQueries({ queryKey: queryKeys.reviewsAll });
-      queryClient.invalidateQueries({ queryKey: queryKeys.repos });
-      if (update?.status === 'completed' || update?.status === 'failed') {
-        queryClient.invalidateQueries({ queryKey: queryKeys.reportsAll });
-      }
+    return onReviewUpdate(() => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboardBundle });
     });
-    return unsub;
   }, [onReviewUpdate, queryClient]);
 
-  useEffect(() => {
-    if (!connected) return undefined;
-    queryClient.invalidateQueries({ queryKey: queryKeys.stats });
-    queryClient.invalidateQueries({ queryKey: queryKeys.reviewsAll });
-    queryClient.invalidateQueries({ queryKey: queryKeys.repos });
-    return undefined;
-  }, [connected, queryClient]);
+  const stats = bundle?.stats;
+  const reviews = bundle?.recentReviews ?? [];
+  const deferredChart = useDeferredValue(stats?.issues);
 
-  const reviews = reviewsData?.data ?? [];
-  const chartData = buildChartData(stats?.issues);
+  const chartData = useMemo(() => buildChartData(deferredChart), [deferredChart]);
   const inProgress = (stats?.pending ?? 0) + (stats?.processing ?? 0);
-  const reposConnected = Array.isArray(reposData) ? reposData.length : 0;
+  const reposConnected = stats?.repoCount ?? 0;
 
   const totalIssues = Object.values(stats?.issues || {}).reduce(
     (a, n) => a + (Number(n) || 0),
     0
   );
 
-  const metricsPending = statsLoading || reposLoading;
-
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
+    <div className="mx-auto max-w-7xl px-4 pt-5 pb-5 sm:px-6 sm:pt-6 lg:px-8">
       <PageHeader
+        compact
         title="Dashboard"
         description="High-level signals across scans, repos, and review queue health."
         hint={
@@ -155,18 +109,18 @@ export default function DashboardPage() {
       />
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
-        {statsError ? (
+        {bundleError ? (
           <div className="card border-red-500/25 bg-red-500/[0.07] p-4 sm:col-span-3" role="alert" aria-live="polite">
             <p className="text-sm text-red-800 dark:text-red-200">Could not load dashboard statistics.</p>
             <button
               type="button"
               className="btn-secondary mt-2 px-3 py-1.5 text-xs"
-              onClick={() => refetchStats()}
+              onClick={() => refetchBundle()}
             >
               Retry
             </button>
           </div>
-        ) : metricsPending ? (
+        ) : isLoading ? (
           Array.from({ length: 3 }).map((_, i) => <StatCardSkeleton key={i} />)
         ) : (
           <>
@@ -203,7 +157,7 @@ export default function DashboardPage() {
       </div>
 
       <div className="mt-3 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-        {!statsLoading && !statsError && stats ? (
+        {!isLoading && !bundleError && stats ? (
           <>
             <MetricCard icon={Activity} label="Throughput" value={stats.total} sub="Total queued analyses" />
             <MetricCard
@@ -227,80 +181,52 @@ export default function DashboardPage() {
               sub={reposConnected === 1 ? '1 codebase on file' : `${reposConnected} codebases on file`}
             />
           </>
-        ) : statsLoading ? (
+        ) : isLoading ? (
           Array.from({ length: 4 }).map((_, i) => <StatCardSkeleton key={`s-${i}`} />)
         ) : null}
       </div>
 
       <div className="mt-8 grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-6 lg:items-stretch">
         <div className="flex min-h-0 flex-col lg:h-full">
-          {statsError ? (
+          {bundleError ? (
             <div className="card flex min-h-[12rem] flex-1 flex-col p-5 lg:min-h-0">
               <p className="text-xs text-desk-muted">
                 Severity mix chart needs stats — use Retry on the banner above when it appears.
               </p>
             </div>
-          ) : statsLoading ? (
+          ) : isLoading ? (
             <div className="card flex min-h-[16rem] flex-1 flex-col space-y-3 p-5 lg:min-h-0">
               <div className="h-4 w-32 animate-pulse rounded bg-desk-elevated/80" aria-hidden="true" />
               <div className="min-h-0 flex-1 animate-pulse rounded-md bg-desk-elevated/60" aria-hidden="true" />
             </div>
           ) : (
-            <CollapsibleSection
-              idPrefix="dash-findings-mix"
-              className="!mb-0 flex min-h-[16rem] flex-1 flex-col lg:min-h-0"
-              icon={BarChart3}
-              title="Findings mix"
-              badge={totalIssues}
-              expandable={false}
-              summary={findingsMixSummary(chartData)}
-              panelClassName="flex min-h-0 flex-1 flex-col p-4 sm:p-5"
+            <Suspense
+              fallback={
+                <div className="card flex min-h-[16rem] flex-1 animate-pulse rounded-md bg-desk-elevated/60 lg:min-h-0" />
+              }
             >
-              <p className="mb-4 shrink-0 text-[11px] text-desk-muted">
-                Issue counts by severity across your workspace (aggregated stats).
-              </p>
-              <div className="min-h-[176px] w-full min-w-0 flex-1 lg:min-h-0">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartData} barSize={22} margin={{ top: 4, right: 4, bottom: 0, left: -12 }}>
-                    <XAxis
-                      dataKey="name"
-                      tick={{ fill: '#57606a', fontSize: 10 }}
-                      axisLine={false}
-                      tickLine={false}
-                    />
-                    <YAxis
-                      tick={{ fill: '#57606a', fontSize: 10 }}
-                      axisLine={false}
-                      tickLine={false}
-                      allowDecimals={false}
-                      width={28}
-                    />
-                    <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(87, 96, 106, 0.12)' }} />
-                    <Bar dataKey="value" radius={[3, 3, 0, 0]}>
-                      {chartData.map((entry) => (
-                        <Cell key={entry.name} fill={entry.color} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </CollapsibleSection>
+              <DashboardFindingsChart chartData={chartData} totalIssues={totalIssues} />
+            </Suspense>
           )}
         </div>
 
         <div className="card flex min-h-0 flex-col overflow-hidden p-0 lg:mb-0 lg:h-full">
-          {reviewsError ? (
-            <div className="flex flex-1 flex-col justify-center border-b border-transparent px-4 py-12 text-center sm:px-5" role="alert" aria-live="polite">
+          {bundleError ? (
+            <div
+              className="flex flex-1 flex-col justify-center border-b border-transparent px-4 py-12 text-center sm:px-5"
+              role="alert"
+              aria-live="polite"
+            >
               <p className="text-sm text-red-800 dark:text-red-300">Could not load recent activity.</p>
               <button
                 type="button"
                 className="btn-secondary mt-3 px-3 py-1.5 text-xs"
-                onClick={() => refetchReviews()}
+                onClick={() => refetchBundle()}
               >
                 Retry
               </button>
             </div>
-          ) : reviewsLoading ? (
+          ) : isLoading ? (
             <div className="grid min-h-[16rem] flex-1 grid-cols-1 gap-px overflow-hidden bg-desk-border p-px sm:min-h-0 sm:grid-cols-2 sm:[grid-template-rows:repeat(2,minmax(0,1fr))]">
               {Array.from({ length: 4 }).map((_, i) => (
                 <DashboardActivitySkeleton key={i} />
@@ -331,9 +257,7 @@ export default function DashboardPage() {
               summary={
                 <>
                   Showing up to {reviews.length} run{reviews.length !== 1 ? 's' : ''} · Latest{' '}
-                  {reviews[0]?.created_at
-                    ? safeDistanceToNow(reviews[0].created_at)
-                    : '—'}
+                  {reviews[0]?.created_at ? safeDistanceToNow(reviews[0].created_at) : '—'}
                 </>
               }
               controls={

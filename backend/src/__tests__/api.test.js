@@ -51,6 +51,23 @@ describe('GitHub OAuth redirect', () => {
     expect(loc).toMatch(/https:\/\/github\.com\/login\/oauth\/authorize\?/);
     expect(loc).toMatch(/client_id=test-github-oauth-client-id/);
     expect(loc).toMatch(/[?&]state=/);
+    expect(loc).not.toMatch(/[?&]prompt=select_account/);
+  });
+
+  it('forces GitHub account picker and clears app session when switch_account=1', async () => {
+    const token = makeToken();
+    const res = await request(app)
+      .get('/api/auth/github')
+      .query({ switch_account: '1' })
+      .set('Cookie', [`acr_session=${token}`])
+      .redirects(0);
+    expect(res.status).toBeGreaterThanOrEqual(300);
+    expect(res.status).toBeLessThan(400);
+    const loc = res.headers.location || '';
+    expect(loc).toMatch(/[?&]prompt=select_account/);
+    const setCookie = res.headers['set-cookie'];
+    const joined = Array.isArray(setCookie) ? setCookie.join(';') : String(setCookie || '');
+    expect(joined).toMatch(/acr_session=/i);
   });
 });
 

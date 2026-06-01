@@ -58,7 +58,8 @@ export const reposApi = {
 export const reviewsApi = {
   list: (params) => api.get('/api/reviews', { params }),
   getOne: (id) => api.get(`/api/reviews/${id}`),
-  getStats: () => api.get('/api/reviews/stats'),
+  getStats: () => api.get('/api/reviews/stats', { timeout: 25_000 }),
+  getDashboard: () => api.get('/api/reviews/dashboard', { timeout: 25_000 }),
   trigger: (data) => api.post('/api/reviews/trigger', data),
   triggerLatest: (repositoryId, branch) =>
     api.post('/api/reviews/trigger/latest', {

@@ -58,4 +58,66 @@ function buildRepositorySummary(repoName, commitShort, stats, meta) {
   return parts.join(' ');
 }
 
-module.exports = { buildRepositorySummary };
+/**
+ * Replace raw analyzer finding counts with active tracked-issue counts (post sync).
+ * Keeps scan coverage sentences; rebuilds category / top-file hints from active issues only.
+ * @param {string} originalSummary
+ * @param {object[]} activeIssues
+ * @param {{ resolvedThisRunCount?: number }} [opts]
+ * @returns {string}
+ */
+function alignSummaryWithTrackedIssues(originalSummary, activeIssues, opts = {}) {
+  const resolvedThisRunCount = Number(opts.resolvedThisRunCount) || 0;
+  const issues = activeIssues || [];
+  const sev = countBySeverity(issues);
+  const n = issues.length;
+
+  let trackedLine;
+  if (n === 0) {
+    trackedLine =
+      'No active findings remain after issue tracking across reviews for this repository.';
+  } else {
+    trackedLine = `We have ${n} active finding${n !== 1 ? 's' : ''} after issue tracking — ${sev.critical || 0} serious, ${sev.warning || 0} worth fixing soon, ${sev.info || 0} FYI, ${sev.suggestion || 0} small cleanups.`;
+  }
+  if (resolvedThisRunCount > 0) {
+    trackedLine += ` ${resolvedThisRunCount} issue${resolvedThisRunCount !== 1 ? 's were' : ' was'} marked resolved in this review.`;
+  }
+
+  let body = String(originalSummary || '').trim();
+  if (!body) return trackedLine;
+
+  const replacedReported = body.replace(/We reported \d+ items[^.]*\./, `${trackedLine}.`);
+  const replacedLocal = replacedReported.replace(
+    /\d+ finding\(s\) from local pattern scan[^.]*\./,
+    `${trackedLine}.`
+  );
+  body = replacedLocal;
+
+  if (!body.includes('after issue tracking') && !body.includes('No active findings remain')) {
+    const firstDot = body.indexOf('. ');
+    if (firstDot !== -1) {
+      body = `${body.slice(0, firstDot + 1)} ${trackedLine}.${body.slice(firstDot + 1)}`;
+    } else {
+      body = `${body} ${trackedLine}.`;
+    }
+  }
+
+  body = body.replace(/ Most findings types:[^.]*\./g, '');
+  body = body.replace(/ Files with the most flags:[^.]*\./g, '');
+
+  if (n > 0) {
+    const cat = countByCategory(issues);
+    const catTop = Object.entries(cat)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 4)
+      .map(([k, v]) => `${k.replace(/-/g, ' ')}: ${v}`)
+      .join('; ');
+    const tops = topFilePaths(issues, 6);
+    if (catTop) body += ` Most findings types: ${catTop}.`;
+    if (tops.length) body += ` Files with the most flags: ${tops.join('; ')}.`;
+  }
+
+  return body.trim();
+}
+
+module.exports = { buildRepositorySummary, alignSummaryWithTrackedIssues, countBySeverity };

@@ -11,7 +11,7 @@ This document complements the main [README](../README.md). It is written for eva
 | **Supabase project** | PostgreSQL + PostgREST used by `@supabase/supabase-js` | Apply `backend/src/config/schema.sql` once in the SQL editor for a **new** project; see schema header for incremental migrations |
 | **GitHub OAuth App** | User login + API token | Callback URL must match `FRONTEND_URL` + `/auth/callback` |
 | **Public HTTPS URL (dev)** | GitHub webhooks | `BACKEND_URL` — use ngrok, Cloudflare Tunnel, etc. (`WEBHOOK_QUICKSTART.md`) |
-| **Redis** | Optional; default is in-process jobs | Set `QUEUE_DRIVER=redis` and `REDIS_URL` for Bull (used in `docker-compose.yml`) |
+| **Redis** | Optional; default is in-process jobs | Set `QUEUE_DRIVER=redis` and `REDIS_URL` only when testing Bull locally (`docker compose --profile redis up`) |
 
 There is **no** “local Postgres only” mode: the backend loads `backend/src/config/database.js`, which **requires** `SUPABASE_URL` and `SUPABASE_SERVICE_KEY` and exits if they are missing. A bundled Postgres container does **not** replace Supabase for this codebase.
 
@@ -62,11 +62,11 @@ This makes **LAN or phone-on-WiFi** testing easier: open the dashboard at `http:
 
 ## 3. Docker Compose
 
-`docker-compose.yml` starts **Redis**, **backend**, and **frontend** dev servers. You still need valid **Supabase** credentials in `backend/.env`.
+`docker-compose.yml` starts **backend** and **frontend** dev servers with the same **in-process** job queue as `npm run dev` on the host (no Redis). You still need valid **Supabase** credentials in `backend/.env`.
 
 - **`env_file` with `required: false`**: requires **Docker Compose v2.24+**. Older Compose: create empty `backend/.env` / `frontend/.env` after copying from `.env.example`, or upgrade Docker Desktop / the Compose plugin.
 - Bind mounts hide image `node_modules`; services run `npm ci` before `npm run dev` so devDependencies (e.g. nodemon, Vite) are present.
-- **`QUEUE_DRIVER=redis`** is set in Compose so the Redis service matches the worker configuration.
+- Optional **`docker compose --profile redis up`**: starts Redis; set `QUEUE_DRIVER=redis` and `REDIS_URL=redis://redis:6379` in `backend/.env` to mirror production queuing.
 
 ## 4. Scripts that exist vs removed
 

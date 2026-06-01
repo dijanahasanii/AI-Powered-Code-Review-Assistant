@@ -94,6 +94,13 @@ if (!backendEnv) {
       warnings.push(`backend/.env: ${k} — OAuth, CORS, or webhooks may fail until set (see README §14)`);
     }
   }
+
+  const nodeEnv = (backendEnv.NODE_ENV || process.env.NODE_ENV || 'development').toLowerCase();
+  if (backendEnv.QUEUE_DRIVER === 'redis' && nodeEnv !== 'production') {
+    warnings.push(
+      'backend/.env: QUEUE_DRIVER=redis — local dev usually omits this (in-process queue). Remove it unless Redis is running on REDIS_URL.'
+    );
+  }
 }
 
 if (!feEnv) {

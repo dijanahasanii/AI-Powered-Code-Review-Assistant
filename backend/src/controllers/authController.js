@@ -60,6 +60,11 @@ function githubTokenExchangeRedirectUri(queryRedirectUri) {
  * Step 1: Redirect user to GitHub OAuth authorization page
  * GET /api/auth/github
  */
+function wantsGithubAccountPicker(req) {
+  const raw = req.query.switch_account;
+  return raw === '1' || raw === 'true';
+}
+
 const githubRedirect = (req, res, next) => {
   try {
     if (!process.env.GITHUB_CLIENT_ID) {
@@ -82,6 +87,13 @@ const githubRedirect = (req, res, next) => {
       throw e;
     }
     params.set('state', state);
+
+    // Let users pick another GitHub identity instead of silently reusing the browser session.
+    if (wantsGithubAccountPicker(req)) {
+      clearAuthCookie(res);
+      params.set('prompt', 'select_account');
+    }
+
     res.redirect(`https://github.com/login/oauth/authorize?${params}`);
   } catch (err) {
     next(err);

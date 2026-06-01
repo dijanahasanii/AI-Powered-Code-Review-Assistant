@@ -756,7 +756,7 @@ Smoke check: `curl -s http://localhost:3001/health` should return JSON with `"st
 
 ### 4b. Docker Compose (optional)
 
-`docker-compose.yml` runs **Redis**, the **backend** (`QUEUE_DRIVER=redis`), and the **Vite** dev server. It does **not** replace Supabase: copy `backend/.env.example` → `backend/.env` with real `SUPABASE_URL` and `SUPABASE_SERVICE_KEY` before `docker compose up`. See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for Compose version notes (`env_file` / `required: false`).
+`docker-compose.yml` runs the **backend** and **Vite** dev server with an **in-process** queue (no Redis). It does **not** replace Supabase: copy `backend/.env.example` → `backend/.env` with real `SUPABASE_URL` and `SUPABASE_SERVICE_KEY` before `docker compose up`. Optional: `docker compose --profile redis up` plus `QUEUE_DRIVER=redis` in `.env` for Bull. See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for Compose version notes (`env_file` / `required: false`).
 
 ### 5. Expose backend for GitHub webhooks (development)
 

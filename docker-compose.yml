@@ -1,15 +1,15 @@
-# Local full stack: Redis + Bull worker + Express + Vite.
+# Local full stack: Express + Vite (in-process review jobs — no Redis required).
 #
-# The app persists data through Supabase (PostgREST), not a bundled Postgres container.
-# Create backend/.env and frontend/.env from *.env.example before first run, or rely on
-# optional env_file (Docker Compose v2.24+). Minimum for backend: SUPABASE_URL,
-# SUPABASE_SERVICE_KEY, JWT_SECRET (>= 16 chars), TOKEN_ENCRYPTION_KEY_CURRENT (64 hex),
-# GITHUB_* and BACKEND_URL for OAuth/webhooks. QUEUE_DRIVER=redis is set below for Bull.
+# Data persists through Supabase (PostgREST), not a bundled Postgres container.
+# Copy backend/.env.example → backend/.env (and frontend) before first run.
+# Do NOT set QUEUE_DRIVER=redis in backend/.env unless you also run Redis (see README §11).
 #
+# Optional production-like queue: docker compose --profile redis up
 # https://docs.docker.com/compose/compose-file/05-services/#env_file
 
 services:
   redis:
+    profiles: ['redis']
     image: redis:7-alpine
     ports:
       - '6379:6379'
@@ -30,19 +30,18 @@ services:
     environment:
       - NODE_ENV=development
       - PORT=3001
-      - QUEUE_DRIVER=redis
-      - REDIS_URL=redis://redis:6379
     env_file:
       - path: ./backend/.env
         required: false
     depends_on:
       redis:
         condition: service_healthy
+        required: false
     volumes:
       - ./backend:/app
       - /app/node_modules
     # Bind mount hides image node_modules; npm ci restores devDependencies in the anonymous volume.
-    command: ["sh", "-c", "npm ci && npm run dev"]
+    command: ['sh', '-c', 'npm ci && npm run dev']
 
   frontend:
     build:
@@ -59,7 +58,7 @@ services:
     volumes:
       - ./frontend:/app
       - /app/node_modules
-    command: ["sh", "-c", "npm ci && npm run dev -- --host"]
+    command: ['sh', '-c', 'npm ci && npm run dev -- --host']
 
 volumes:
   redis_data:

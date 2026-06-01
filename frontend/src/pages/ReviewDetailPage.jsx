@@ -27,6 +27,7 @@ import { FilesChangedPanel } from '../features/reviews/components/FilesChangedPa
 import { ReviewAnalysisMetricsStrip } from '../features/reviews/components/ReviewAnalysisMetricsStrip';
 import { ReviewVerdictBanner } from '../features/reviews/components/ReviewVerdictBanner';
 import { queryKeys } from '../lib/queryKeys';
+import { filterActiveReviewIssues } from '../lib/issueLifecycle';
 
 export default function ReviewDetailPage() {
   const { id } = useParams();
@@ -85,7 +86,10 @@ export default function ReviewDetailPage() {
     return unsub;
   }, [id, onReviewUpdate, queryClient]);
 
-  const issues = useMemo(() => data?.review_issues ?? [], [data]);
+  const issues = useMemo(
+    () => filterActiveReviewIssues(data?.review_issues ?? []),
+    [data]
+  );
 
   const sortedIssues = useMemo(
     () =>

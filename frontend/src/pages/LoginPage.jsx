@@ -3,19 +3,18 @@ import { Github } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import LandingShell from '../components/common/LandingShell';
 import { BrowserOfflineBar } from '../components/common/BrowserOfflineBar';
-import { getPublicApiBaseUrl } from '../config/publicUrls';
+import { githubOAuthStartUrl } from '../config/githubOAuth';
 
 export default function LoginPage() {
   const { state } = useLocation();
   const authError = state?.authError;
   const loginStartedRef = useRef(false);
 
-  const handleLogin = () => {
+  const startOAuth = (switchAccount) => {
     if (loginStartedRef.current) return;
     loginStartedRef.current = true;
     // Server-initiated OAuth adds a signed `state` (CSRF mitigation); must match GITHUB_CLIENT_ID in backend/.env
-    const api = getPublicApiBaseUrl();
-    window.location.href = `${api}/api/auth/github`;
+    window.location.href = githubOAuthStartUrl(switchAccount);
   };
 
   return (
@@ -39,7 +38,7 @@ export default function LoginPage() {
           )}
         </div>
 
-        <button type="button" onClick={handleLogin} className="btn-primary w-full justify-center py-2.5">
+        <button type="button" onClick={() => startOAuth(false)} className="btn-primary w-full justify-center py-2.5">
           <Github size={18} />
           Continue with GitHub
         </button>

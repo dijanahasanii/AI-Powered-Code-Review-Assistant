@@ -3,6 +3,9 @@ const { analyzeCode } = require('./openaiService');
 const { fetchCommitDiff, postPRComments } = require('./githubService');
 const { generateAndPersistReport } = require('./reportGeneratorService');
 const { logger } = require('../utils/logger');
+const { invalidateDashboardStatsCache } = require('./reviewStatsService');
+const { alignSummaryWithTrackedIssues } = require('../analyzers/buildSummary');
+const { syncRepositoryIssues } = require('./issueTrackingService');
 
 let ioSingleton = null;
 
@@ -36,6 +39,7 @@ async function runAnalyzeJob(jobData, { rethrowOnError = false } = {}) {
   try {
     await updateReviewStatus(reviewId, 'processing', { error_message: null });
     emitUpdate(io, userId, repositoryId, { reviewId, status: 'processing' });
+    invalidateDashboardStatsCache(userId);
 
     let diff = '';
     let fileStats = [];
@@ -62,7 +66,17 @@ async function runAnalyzeJob(jobData, { rethrowOnError = false } = {}) {
       commitSha,
     });
 
-    await finalizeReview(reviewId, analysis, fileStats);
+    const tracking = await syncRepositoryIssues(repositoryId, reviewId, analysis.issues, {
+      scanComplete: analysis.scanComplete === true,
+    });
+    analysis.overallScore = tracking.overallScore;
+    analysis.issues = tracking.activeIssues;
+    analysis.summary = alignSummaryWithTrackedIssues(analysis.summary, tracking.activeIssues, {
+      resolvedThisRunCount: tracking.resolvedThisRun.length,
+    });
+
+    const snapshotIssues = [...tracking.activeIssues, ...tracking.resolvedThisRun];
+    await finalizeReview(reviewId, analysis, fileStats, snapshotIssues);
 
     try {
       const { data: reviewRow } = await supabase
@@ -96,6 +110,7 @@ async function runAnalyzeJob(jobData, { rethrowOnError = false } = {}) {
       overallScore: analysis.overallScore,
       issueCount: analysis.issues.length,
     });
+    invalidateDashboardStatsCache(userId);
 
     logger.info('Review job completed', {
       reviewId,
@@ -112,6 +127,7 @@ async function runAnalyzeJob(jobData, { rethrowOnError = false } = {}) {
     });
     await markReviewFailed(reviewId, err);
     emitUpdate(io, userId, repositoryId, { reviewId, status: 'failed', error: err.message });
+    invalidateDashboardStatsCache(userId);
     if (rethrowOnError) throw err;
   }
 }
@@ -196,25 +212,31 @@ const markReviewFailed = async (reviewId, err) => {
   throwIfDbError('markReviewFailed', error);
 };
 
-const finalizeReview = async (reviewId, analysis, fileStats) => {
+const mapIssueToReviewRow = (reviewId, issue) => ({
+  review_id: reviewId,
+  repository_issue_id: issue.repositoryIssueId ?? null,
+  fingerprint: issue.fingerprint ?? null,
+  lifecycle_status: issue.lifecycleStatus ?? 'open',
+  file_path: issue.filePath,
+  line_number: issue.lineNumber,
+  severity: issue.severity,
+  category: issue.category,
+  title: issue.title,
+  description: issue.description,
+  suggestion: issue.suggestion,
+  code_snippet: issue.codeSnippet ?? null,
+  matched_rule: issue.matchedRule ?? null,
+});
+
+const finalizeReview = async (reviewId, analysis, fileStats, snapshotIssues) => {
+  const issuesToPersist = snapshotIssues ?? analysis.issues;
   let issuesInserted = false;
 
   try {
-    if (analysis.issues.length > 0) {
-      const { error: insErr } = await supabase.from('review_issues').insert(
-        analysis.issues.map((issue) => ({
-          review_id: reviewId,
-          file_path: issue.filePath,
-          line_number: issue.lineNumber,
-          severity: issue.severity,
-          category: issue.category,
-          title: issue.title,
-          description: issue.description,
-          suggestion: issue.suggestion,
-          code_snippet: issue.codeSnippet ?? null,
-          matched_rule: issue.matchedRule ?? null,
-        }))
-      );
+    if (issuesToPersist.length > 0) {
+      const { error: insErr } = await supabase
+        .from('review_issues')
+        .insert(issuesToPersist.map((issue) => mapIssueToReviewRow(reviewId, issue)));
       throwIfDbError('finalizeReview(issues)', insErr);
       issuesInserted = true;
     }

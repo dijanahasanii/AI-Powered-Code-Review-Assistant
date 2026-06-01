@@ -49,19 +49,50 @@ CREATE TABLE IF NOT EXISTS code_reviews (
   UNIQUE(repository_id, commit_sha)
 );
 
+CREATE TABLE IF NOT EXISTS repository_issues (
+  id                      UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  repository_id           UUID NOT NULL REFERENCES repositories(id) ON DELETE CASCADE,
+  fingerprint             VARCHAR(64) NOT NULL,
+  file_path               TEXT NOT NULL,
+  line_number             INTEGER,
+  severity                VARCHAR(20) NOT NULL,
+  category                VARCHAR(50),
+  title                   VARCHAR(500) NOT NULL,
+  description             TEXT NOT NULL,
+  suggestion              TEXT,
+  code_snippet            TEXT,
+  matched_rule            TEXT,
+  status                  VARCHAR(20) NOT NULL DEFAULT 'open',
+  first_seen_review_id    UUID REFERENCES code_reviews(id) ON DELETE SET NULL,
+  last_seen_review_id     UUID REFERENCES code_reviews(id) ON DELETE SET NULL,
+  last_resolved_review_id UUID REFERENCES code_reviews(id) ON DELETE SET NULL,
+  resolved_at             TIMESTAMPTZ,
+  created_at              TIMESTAMPTZ DEFAULT NOW(),
+  updated_at              TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT repository_issues_status_check
+    CHECK (status IN ('open', 'resolved', 'reopened')),
+  UNIQUE (repository_id, fingerprint)
+);
+
+CREATE INDEX IF NOT EXISTS idx_repository_issues_repo_status
+  ON repository_issues (repository_id, status);
+
 CREATE TABLE IF NOT EXISTS review_issues (
-  id               UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  review_id        UUID REFERENCES code_reviews(id) ON DELETE CASCADE,
-  file_path        TEXT NOT NULL,
-  line_number      INTEGER,
-  severity         VARCHAR(20) NOT NULL,   
-  category         VARCHAR(50),           
-  title            VARCHAR(500) NOT NULL,
-  description      TEXT NOT NULL,
-  suggestion       TEXT,
-  code_snippet     TEXT,
-  matched_rule     TEXT,
-  created_at       TIMESTAMPTZ DEFAULT NOW()
+  id                   UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  review_id            UUID REFERENCES code_reviews(id) ON DELETE CASCADE,
+  repository_issue_id  UUID REFERENCES repository_issues(id) ON DELETE SET NULL,
+  fingerprint          VARCHAR(64),
+  lifecycle_status     VARCHAR(20),
+  file_path            TEXT NOT NULL,
+  line_number          INTEGER,
+  severity             VARCHAR(20) NOT NULL,   
+  category             VARCHAR(50),           
+  title                VARCHAR(500) NOT NULL,
+  description          TEXT NOT NULL,
+  suggestion           TEXT,
+  code_snippet         TEXT,
+  matched_rule         TEXT,
+  created_at           TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS review_file_stats (
@@ -104,6 +135,7 @@ CREATE INDEX IF NOT EXISTS idx_analysis_reports_created_at ON analysis_reports(c
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE repositories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE code_reviews ENABLE ROW LEVEL SECURITY;
+ALTER TABLE repository_issues ENABLE ROW LEVEL SECURITY;
 ALTER TABLE review_issues ENABLE ROW LEVEL SECURITY;
 ALTER TABLE analysis_reports ENABLE ROW LEVEL SECURITY;
 
