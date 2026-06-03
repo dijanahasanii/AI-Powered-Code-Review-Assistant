@@ -127,18 +127,22 @@ export function ConnectedRepoCard({
         </>
       )}
 
-      <div className="mt-auto space-y-2 border-t border-desk-border pt-4">
-        <label className="block text-[11px] font-medium text-desk-muted">
-          <span className="mb-1 flex items-center gap-1">
-            <GitBranch size={12} aria-hidden="true" />
-            Branch to review
-          </span>
+      <div className="mt-auto border-t border-desk-border pt-4">
+        <p
+          id={`branch-label-${repo.id}`}
+          className="mb-1 flex items-center gap-1 text-[11px] font-medium text-desk-muted"
+        >
+          <GitBranch size={12} aria-hidden="true" />
+          Branch to review
+        </p>
+        <div className="grid grid-cols-[1fr_auto] gap-x-2 gap-y-2">
           <select
             value={selectedBranch}
             onChange={(e) => setSelectedBranch(e.target.value)}
             onFocus={() => setLoadBranches(true)}
             disabled={actionsDisabled}
-            className="w-full rounded-md border border-desk-border bg-desk-canvas px-2 py-1.5 font-mono text-[11px] text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 disabled:opacity-50 dark:text-gray-100"
+            aria-labelledby={`branch-label-${repo.id}`}
+            className="min-h-[2.25rem] min-w-0 rounded-md border border-desk-border bg-desk-canvas px-2 py-1.5 font-mono text-[11px] text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 disabled:opacity-50 dark:text-gray-100"
             aria-label={`Branch to review for ${repo.full_name}`}
           >
             <option value="">{defaultLabel}</option>
@@ -148,9 +152,6 @@ export function ConnectedRepoCard({
               </option>
             ))}
           </select>
-        </label>
-
-        <div className="flex gap-2">
           <button
             type="button"
             title="Review latest commit on selected branch"
@@ -158,7 +159,7 @@ export function ConnectedRepoCard({
             aria-busy={reviewBusy}
             onClick={() => onReviewLatest(repo.id, selectedBranch || undefined)}
             disabled={actionsDisabled}
-            className="btn-secondary inline-flex min-h-[2.25rem] min-w-0 flex-1 items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium"
+            className="btn-secondary col-start-1 inline-flex min-h-[2.25rem] min-w-0 items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium"
           >
             {reviewBusy ? <Spinner size="sm" /> : <Sparkles size={13} aria-hidden="true" />}
             <span className="truncate">Review latest</span>
@@ -168,7 +169,7 @@ export function ConnectedRepoCard({
             aria-label={`Disconnect ${repo.full_name}`}
             onClick={() => onDisconnect(repo)}
             disabled={disconnectPending}
-            className="rounded-md border border-transparent p-2 text-desk-muted transition-colors hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-300 disabled:opacity-40"
+            className="col-start-2 row-start-2 rounded-md border border-transparent p-2 text-desk-muted transition-colors hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-300 disabled:opacity-40"
           >
             <Trash2 size={15} />
           </button>
