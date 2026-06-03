@@ -3,6 +3,7 @@ import { GitBranch, GitCommit, Clock, Wrench } from 'lucide-react';
 import clsx from 'clsx';
 import { ScoreRing, RemediationStatusBadge, SeverityBadge } from '../../../components/common/UI';
 import { SEVERITY_ORDER } from '../../reviews/analysisConstants';
+import { shouldShowRemediationBadge } from '../lib/remediationDisplay';
 
 function MetaChip({ icon: Icon, children, mono }) {
   return (
@@ -57,7 +58,9 @@ export function ReportDetailHeader({
           </div>
 
           <div className="flex flex-col items-stretch gap-2 sm:items-end sm:pt-1">
-            <RemediationStatusBadge status={report.remediation_status} />
+            {shouldShowRemediationBadge(report) && (
+              <RemediationStatusBadge status={report.remediation_status} />
+            )}
             {canApplyFixes && (
               <button
                 type="button"

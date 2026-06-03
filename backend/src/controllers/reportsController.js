@@ -6,6 +6,7 @@ const {
   ensureMissingReportsForUser,
 } = require('../services/reportGeneratorService');
 const { enqueueRemediationJob } = require('../services/remediationQueue');
+const { normalizeReportRemediation } = require('../lib/reportRemediationStatus');
 
 const isMissingReportsTable = (error) =>
   error?.code === 'PGRST205' ||
@@ -53,7 +54,7 @@ const listReports = async (req, res, next) => {
 
     res.json({
       success: true,
-      data,
+      data: (data || []).map(normalizeReportRemediation),
       pagination: { page: Number(page), limit: Number(limit), total: count },
     });
   } catch (err) {
@@ -79,7 +80,7 @@ const getReport = async (req, res, next) => {
     }
 
     res.set('Cache-Control', 'no-store');
-    res.json({ success: true, data: report });
+    res.json({ success: true, data: normalizeReportRemediation(report) });
   } catch (err) {
     next(err);
   }

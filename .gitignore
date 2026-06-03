@@ -28,6 +28,9 @@ coverage/
 .nyc_output/
 frontend/test-results/
 
+# Local archives (may contain .env if zipped from full folder)
+*.zip
+
 # OS
 .DS_Store
 Thumbs.db

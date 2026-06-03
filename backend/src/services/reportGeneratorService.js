@@ -4,6 +4,7 @@ const fs = require('fs/promises');
 const path = require('path');
 const { supabase } = require('../config/database');
 const reportsRepository = require('../repositories/reportsRepository');
+const { remediationStatusForIssueCount, formatRemediationStatusLabel } = require('../lib/reportRemediationStatus');
 const { logger } = require('../utils/logger');
 
 const REPORTS_DIR = path.join(__dirname, '..', '..', 'reports');
@@ -63,7 +64,7 @@ function buildMarkdownReport({
     `| Analysis type | ${analysisType} |`,
     `| Overall score | ${overallScore != null ? overallScore : '—'} |`,
     `| Issue count | ${issues.length} |`,
-    `| Remediation status | ${remediationStatus} |`,
+    `| Remediation status | ${formatRemediationStatusLabel(remediationStatus)} |`,
     ``,
     `### Severity summary`,
     ``,
@@ -151,7 +152,7 @@ async function generateAndPersistReport({
   const severitySummary = countSeverities(issues);
   const analysisType = inferAnalysisType(issues, triggeredBy);
   const generatedAt = new Date().toISOString();
-  const remediationStatus = 'pending';
+  const remediationStatus = remediationStatusForIssueCount(issues.length);
 
   const markdown = buildMarkdownReport({
     repositoryName,

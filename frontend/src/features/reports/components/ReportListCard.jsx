@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { GitCommit, GitBranch } from 'lucide-react';
 import { safeDistanceToNow } from '../../../lib/safeDates';
 import { RemediationStatusBadge } from '../../../components/common/UI';
+import { shouldShowRemediationBadge } from '../lib/remediationDisplay';
 
 function severityLabel(summary) {
   if (!summary || typeof summary !== 'object') return null;
@@ -44,7 +45,9 @@ export function ReportListCard({ report }) {
                 {report.analysis_type || 'Code Analysis'}
               </span>
             )}
-            <RemediationStatusBadge status={report.remediation_status} compact />
+            {shouldShowRemediationBadge(report) && (
+              <RemediationStatusBadge status={report.remediation_status} compact />
+            )}
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-2 font-mono text-[11px] text-desk-muted">
             <span className="min-w-0 truncate" title={report.repository_name}>
