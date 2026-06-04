@@ -11,6 +11,10 @@ const reportsRepository = require('../repositories/reportsRepository');
 const { loadReviewIssues } = require('./reportGeneratorService');
 const { applyFixesToFiles } = require('./targetedFixService');
 const { logger } = require('../utils/logger');
+const {
+  isAutoRemediationEnabled,
+  AUTO_REMEDIATION_DISABLED_MESSAGE,
+} = require('../lib/remediationFeatureFlag');
 
 const execFileAsync = promisify(execFile);
 
@@ -127,6 +131,20 @@ async function resolveRemediationBranch(report, repoFullName, userId, logParts) 
  * @param {string} opts.repoFullName - owner/repo
  */
 async function runRemediation({ reportId, userId, repoFullName }) {
+  if (!isAutoRemediationEnabled()) {
+    const err = new Error(AUTO_REMEDIATION_DISABLED_MESSAGE);
+    if (reportId) {
+      try {
+        await updateRemediationStatus(reportId, 'failed', {
+          remediation_log: AUTO_REMEDIATION_DISABLED_MESSAGE,
+        });
+      } catch {
+        /* best effort — report may not exist for malformed jobs */
+      }
+    }
+    throw err;
+  }
+
   const logParts = [];
 
   const { data: report, error } = await reportsRepository.getReportWithRepo(reportId);

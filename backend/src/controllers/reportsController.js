@@ -6,6 +6,10 @@ const {
   ensureMissingReportsForUser,
 } = require('../services/reportGeneratorService');
 const { enqueueRemediationJob } = require('../services/remediationQueue');
+const {
+  isAutoRemediationEnabled,
+  AUTO_REMEDIATION_DISABLED_MESSAGE,
+} = require('../lib/remediationFeatureFlag');
 const { normalizeReportRemediation } = require('../lib/reportRemediationStatus');
 
 const isMissingReportsTable = (error) =>
@@ -136,6 +140,10 @@ const confirmRemediation = async (req, res, next) => {
 
     if (!report.issue_count || report.issue_count === 0) {
       throw new AppError('This report has no issues to remediate', 400);
+    }
+
+    if (!isAutoRemediationEnabled()) {
+      throw new AppError(AUTO_REMEDIATION_DISABLED_MESSAGE, 503);
     }
 
     await enqueueRemediationJob({

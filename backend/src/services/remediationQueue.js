@@ -1,10 +1,20 @@
 const { logger } = require('../utils/logger');
 const { useInlineJobQueue } = require('./queueConfig');
+const {
+  isAutoRemediationEnabled,
+  AUTO_REMEDIATION_DISABLED_MESSAGE,
+} = require('../lib/remediationFeatureFlag');
 
 /**
  * Enqueue remediation (inline async by default, mirrors analyze queue pattern).
  */
 async function enqueueRemediationJob(data) {
+  if (!isAutoRemediationEnabled()) {
+    const err = new Error(AUTO_REMEDIATION_DISABLED_MESSAGE);
+    err.code = 'REMEDIATION_DISABLED';
+    throw err;
+  }
+
   const { runRemediation } = require('./remediationService');
 
   const run = () =>

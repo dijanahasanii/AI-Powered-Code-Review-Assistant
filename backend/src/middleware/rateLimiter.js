@@ -21,9 +21,12 @@ const rateLimiter = rateLimit({
   skip: skipWebhookAndProbeTraffic,
 });
 
+/** Applied on /api/auth/github, /github/callback, and /logout only (see routes/auth.js). */
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
   message: { success: false, error: 'Too many auth attempts, please try again later.' },
 });
 
