@@ -29,10 +29,21 @@ export function purgeReviewsForRepository(queryClient, repositoryId) {
   });
 
   queryClient.setQueriesData({ queryKey: queryKeys.dashboardBundle }, (old) => {
-    if (!old?.recentReviews) return old;
-    const recentReviews = old.recentReviews.filter((r) => !belongsToRepository(r, repositoryId));
-    if (recentReviews.length === old.recentReviews.length) return old;
-    return { ...old, recentReviews };
+    if (!old) return old;
+
+    const recentReviews = (old.recentReviews || []).filter((r) => !belongsToRepository(r, repositoryId));
+    const recentChanged = recentReviews.length !== (old.recentReviews || []).length;
+
+    let stats = old.stats;
+    if (stats && typeof stats.repoCount === 'number') {
+      const repoCount = Math.max(0, stats.repoCount - 1);
+      if (repoCount !== stats.repoCount) {
+        stats = { ...stats, repoCount };
+      }
+    }
+
+    if (!recentChanged && stats === old.stats) return old;
+    return { ...old, recentReviews, ...(stats !== old.stats ? { stats } : {}) };
   });
 }
 
@@ -40,6 +51,7 @@ export function purgeReviewsForRepository(queryClient, repositoryId) {
  * After disconnect/delete — refetch lists so server and UI stay aligned.
  */
 export function refreshWorkspaceAfterRepositoryRemoved(queryClient) {
+  queryClient.invalidateQueries({ queryKey: queryKeys.dashboardBundle });
   return Promise.all([
     queryClient.refetchQueries({ queryKey: queryKeys.dashboardBundle, type: 'all' }),
     queryClient.refetchQueries({ queryKey: queryKeys.reviewsAll, type: 'all' }),

@@ -7,6 +7,7 @@ const { getGithubAccessTokenForUser } = require('./userTokenService');
 const reposRepository = require('../repositories/reposRepository');
 const { createOctokit, installGithubPushWebhook } = require('./githubWebhookService');
 const { deleteReportsForRepository } = require('./reportGeneratorService');
+const { invalidateDashboardStatsCache } = require('./reviewStatsService');
 
 async function requireGithubToken(userId) {
   const token = await getGithubAccessTokenForUser(userId);
@@ -68,6 +69,7 @@ async function connectRepository(userId, body) {
   });
 
   if (error) throw new AppError('Failed to save repository', 500);
+  invalidateDashboardStatsCache(userId);
   return newRepo;
 }
 
@@ -89,6 +91,8 @@ async function disconnectRepository(userId, repositoryId) {
     logger.error(`[repos] delete repository ${repositoryId}:`, delErr);
     throw new AppError(`Could not disconnect repository: ${delErr.message}`, 500);
   }
+
+  invalidateDashboardStatsCache(userId);
 
   // GitHub webhook removal can take seconds (TLS + API latency). Do not block the client; best-effort cleanup.
   if (repo.webhook_id) {
