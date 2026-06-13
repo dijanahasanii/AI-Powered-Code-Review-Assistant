@@ -1,5 +1,7 @@
 # Diagram: GitHub webhook → review queue (conceptual)
 
+Part of [ARCHITECTURE.md](../ARCHITECTURE.md) §6. Related: [queue_processing.md](queue_processing.md), [data_flow.md](data_flow.md).
+
 Textual flow (push / PR event):
 
 1. GitHub sends **signed** `POST` JSON to **`/api/webhooks/github`**.

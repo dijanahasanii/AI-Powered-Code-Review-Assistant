@@ -102,7 +102,7 @@ GitHub (push / pull_request)
 3. **Queue worker** runs **`analyzeCode`** (snapshot + static rules when possible; diff heuristics otherwise — **no OpenAI call** in the default `usesOpenAiApi === false` configuration), saves results to Supabase, and emits **`review:update`** over Socket.IO.
 4. **React dashboard** listens (socket + React Query invalidation) and refreshes lists and detail views.
 
-**Concise architecture narrative (thesis):** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+**Architecture (thesis):** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · **Analysis today vs future LLM:** [docs/FUTURE_AI_INTEGRATION.md](docs/FUTURE_AI_INTEGRATION.md).
 
 ---
 
@@ -509,6 +509,23 @@ Use `supertest` to test routes against the Express app with a mocked Supabase cl
 
 ## 11. Deployment Strategy
 
+### Recommended — single URL (Railway, Render, Docker)
+
+One public HTTPS origin serves the React SPA, REST API, webhooks, and Socket.IO. The backend serves `frontend/dist` when present (built via `npm run build` from repo root).
+
+**Railway (example)**:
+1. Connect GitHub repo; set **root directory** to repository root.
+2. **Build command:** `npm run build`
+3. **Start command:** `npm start`
+4. Add **Redis** plugin → set `REDIS_URL` and `QUEUE_DRIVER=redis`
+5. Set `NODE_ENV=production` and all variables from `backend/.env.example`, with **`BACKEND_URL` and `FRONTEND_URL` set to the same public HTTPS origin** (no trailing slash).
+6. Do **not** set `VITE_API_URL` / `VITE_WS_URL` at build time (same-origin; see `frontend/src/config/publicUrls.js`).
+7. Update GitHub OAuth callback to `https://YOUR-URL/auth/callback`; reconnect repo webhooks after deploy.
+
+**Docker:** `docker build -t ai-code-review .` then run with env vars and `-p 3001:3001` (Redis and Supabase remain external).
+
+**Alternative — split hosts:** deploy frontend and backend separately (sections below).
+
 ### Frontend — Vercel
 
 Vercel is ideal for React/Vite apps:
@@ -708,7 +725,7 @@ The entire pipeline from push to results appearing on the dashboard typically ta
 
 ### Prerequisites
 
-- **Node.js 20 LTS** (matches CI and Docker; `.nvmrc` contains `20` — Node 18 may work but is not what CI runs)
+- **Node.js 20 LTS** (matches CI; `.nvmrc` contains `20` — Node 18 may work but is not what CI runs)
 - **npm** (bundled with Node)
 - **Redis** — only if you set `QUEUE_DRIVER=redis` (see `backend/.env.example`). Default: in-process queue, no Redis
 - **Supabase** project (free tier is enough)
@@ -753,10 +770,6 @@ npm run dev
 ```
 
 Smoke check: `curl -s http://localhost:3001/health` should return JSON with `"status":"ok"` or `"status":"degraded"` and a `database` object (`reachable` reflects a lightweight Supabase probe — see `backend/src/utils/healthPayload.js`).
-
-### 4b. Docker Compose (optional)
-
-`docker-compose.yml` runs the **backend** and **Vite** dev server with an **in-process** queue (no Redis). It does **not** replace Supabase: copy `backend/.env.example` → `backend/.env` with real `SUPABASE_URL` and `SUPABASE_SERVICE_KEY` before `docker compose up`. Optional: `docker compose --profile redis up` plus `QUEUE_DRIVER=redis` in `.env` for Bull. See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for Compose version notes (`env_file` / `required: false`).
 
 ### 5. Expose backend for GitHub webhooks (development)
 
@@ -805,7 +818,7 @@ High-level behavior you can rely on when operating or debugging this stack.
 
 ## 16. Development & reproducibility (supplement)
 
-For a **clean-machine checklist**, Docker Compose behavior, CI parity with Node 20, **browser origins (CORS / Socket.IO / OAuth, LAN testing, `FRONTEND_DEV_EXTRA_ORIGINS`)**, and operational security notes, see **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)** and **[SECURITY.md](SECURITY.md)**.
+For a **clean-machine checklist**, CI parity with Node 20, **browser origins (CORS / Socket.IO / OAuth, LAN testing, `FRONTEND_DEV_EXTRA_ORIGINS`)**, and operational security notes, see **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)** and **[SECURITY.md](SECURITY.md)**.
 
 ---
 
@@ -815,13 +828,17 @@ These artifacts are **additive documentation** and an **offline evaluation harne
 
 | Artifact | Purpose |
 |----------|---------|
-| **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** | Narrative: webhook → queue → analysis → sockets; separation; tradeoffs. |
+| **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** | System overview, frontend/backend architecture, data & realtime flows (Mermaid). |
+| **[docs/FUTURE_AI_INTEGRATION.md](docs/FUTURE_AI_INTEGRATION.md)** | **Future** LLM path — static analysis is what runs today. |
 | **[evaluation/README.md](evaluation/README.md)** | How to run the synthetic diff benchmark. |
 | **[evaluation/results.md](evaluation/results.md)** | Generated table (`npm run evaluate` from repo root). |
 | **[docs/THREAT_MODEL.md](docs/THREAT_MODEL.md)** | Threat list mapped to existing mitigations (no code changes). |
+| **[docs/diagrams/system_context.md](docs/diagrams/system_context.md)** | C4-style context diagram. |
+| **[docs/diagrams/data_flow.md](docs/diagrams/data_flow.md)** | Logical data flow (dashboard, webhook, connect repo). |
 | **[docs/diagrams/oauth_flow.md](docs/diagrams/oauth_flow.md)** | OAuth sequence (text + Mermaid). |
 | **[docs/diagrams/webhook_flow.md](docs/diagrams/webhook_flow.md)** | Webhook → queue overview. |
 | **[docs/diagrams/queue_processing.md](docs/diagrams/queue_processing.md)** | Inline vs Redis worker overview. |
+| **[docs/diagrams/socket_io_flow.md](docs/diagrams/socket_io_flow.md)** | Socket.IO rooms and `review:update`. |
 
 ---
 
@@ -839,7 +856,6 @@ ai-code-review/
 │   │   ├── services/     (openai, github, queue, worker)
 │   │   ├── utils/        (logger)
 │   │   └── __tests__/    (api.test.js, openai.test.js)
-│   ├── Dockerfile
 │   └── package.json
 ├── frontend/
 │   ├── src/
@@ -847,8 +863,6 @@ ai-code-review/
 │   │   ├── components/   (Layout, UI)
 │   │   ├── context/      (AuthContext, SocketContext)
 │   │   └── pages/        (Login, Callback, Dashboard, Repos, Reviews, Detail)
-│   ├── Dockerfile
-│   ├── nginx.conf
 │   └── package.json
 ├── evaluation/           # Thesis-only: synthetic diff harness (npm run evaluate)
 │   ├── fixtures/
@@ -860,7 +874,6 @@ ai-code-review/
 │   ├── DEVELOPMENT.md
 │   ├── THREAT_MODEL.md   # Threat documentation (thesis)
 │   └── diagrams/         # Mermaid / textual architecture diagrams
-├── docker-compose.yml    # Redis + dev backend/frontend (Supabase still required)
 ├── package.json
 └── README.md             ← this file
 ```

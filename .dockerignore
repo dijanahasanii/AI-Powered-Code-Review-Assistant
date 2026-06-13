@@ -1,0 +1,38 @@
+# Dependencies (reinstalled in image)
+node_modules
+**/node_modules
+
+# Secrets and local env
+.env
+.env.*
+**/.env
+**/.env.local
+.environment
+
+# Git and editor
+.git
+.gitignore
+.idea
+.vscode
+
+# Build output (rebuilt in image)
+frontend/dist
+dist
+build
+.vite
+
+# Tests and coverage
+coverage
+**/coverage
+frontend/test-results
+
+# Logs and archives
+*.log
+logs
+*.zip
+
+# Docs and evaluation (not needed at runtime)
+docs
+evaluation
+*.md
+!README.md

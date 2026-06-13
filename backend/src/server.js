@@ -2,6 +2,8 @@ require('dotenv').config();
 const { validateProductionEnvironment } = require('./config/validateProductionEnv');
 validateProductionEnvironment();
 
+const path = require('path');
+const fs = require('fs');
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -125,7 +127,25 @@ app.get('/health', async (_req, res) => {
   }
 });
 
-// JSON 404 for unknown routes (Express default is plain HTML)
+// ── Production SPA (frontend/dist) — only when build output exists ───────────
+const SPA_DIST = path.join(__dirname, '../../frontend/dist');
+const SPA_INDEX = path.join(SPA_DIST, 'index.html');
+const hasSpaBuild = fs.existsSync(SPA_INDEX);
+
+if (hasSpaBuild) {
+  app.use(express.static(SPA_DIST, { index: false, maxAge: '1d' }));
+  app.get('*', (req, res, next) => {
+    const p = req.path || '';
+    if (p.startsWith('/api/') || p === '/health' || p.startsWith('/socket.io')) {
+      return next();
+    }
+    res.sendFile(SPA_INDEX, (err) => (err ? next(err) : undefined));
+  });
+} else if (process.env.NODE_ENV === 'production') {
+  logger.warn('[deploy] frontend/dist missing — run `npm run build` from repo root before production start.');
+}
+
+// JSON 404 for unknown API routes (unchanged when SPA build is absent — dev/test)
 app.use((_req, res) => {
   res.status(404).json({ success: false, error: 'Not found' });
 });
@@ -167,7 +187,7 @@ function startServer() {
       );
       logger.warn('│ Set GITHUB_WEBHOOK_SECRET to a long random string (same when you reconnect).');
       logger.warn(
-        '│ Then in the app: disconnect repo → connect again → push code. Details: WEBHOOK_QUICKSTART.md'
+        '│ Then in the app: disconnect repo → connect again → push code. See README §15.'
       );
       logger.warn(
         '└──────────────────────────────────────────────────────────────────────────────'

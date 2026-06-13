@@ -11,6 +11,8 @@
     "dev:frontend": "cd frontend && npm run dev",
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
     "install:all": "cd backend && npm install && cd ../frontend && npm install",
+    "build": "cd frontend && npm ci && npm run build && cd ../backend && npm ci --omit=dev",
+    "start": "cd backend && node src/server.js",
     "verify:setup": "node scripts/verify-setup.js",
     "evaluate": "node evaluation/run_evaluation.js",
     "test:backend": "cd backend && npm test",

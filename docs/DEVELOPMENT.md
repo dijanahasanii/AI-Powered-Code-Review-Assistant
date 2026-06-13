@@ -2,20 +2,22 @@
 
 This document complements the main [README](../README.md). It is written for evaluators, thesis reviewers, and future maintainers who need a **clean-machine** path from `git clone` to a running stack.
 
+For system design (flows, components, diagrams), see **[ARCHITECTURE.md](ARCHITECTURE.md)** and **[FUTURE_AI_INTEGRATION.md](FUTURE_AI_INTEGRATION.md)**.
+
 ## 1. What you must provision externally
 
 | Resource | Role | Notes |
 |----------|------|--------|
-| **Node.js 20 LTS** | Same major as CI (`.github/workflows/ci.yml`) and Dockerfiles | `.nvmrc` pins `20` |
+| **Node.js 20 LTS** | Same major as CI (`.github/workflows/ci.yml`) | `.nvmrc` pins `20` |
 | **npm** | Comes with Node | Use `npm ci` in CI; local `npm install` is fine |
 | **Supabase project** | PostgreSQL + PostgREST used by `@supabase/supabase-js` | Apply `backend/src/config/schema.sql` once in the SQL editor for a **new** project; see schema header for incremental migrations |
 | **GitHub OAuth App** | User login + API token | Callback URL must match `FRONTEND_URL` + `/auth/callback` |
-| **Public HTTPS URL (dev)** | GitHub webhooks | `BACKEND_URL` — use ngrok, Cloudflare Tunnel, etc. (`WEBHOOK_QUICKSTART.md`) |
-| **Redis** | Optional; default is in-process jobs | Set `QUEUE_DRIVER=redis` and `REDIS_URL` only when testing Bull locally (`docker compose --profile redis up`) |
+| **Public HTTPS URL (dev)** | GitHub webhooks | `BACKEND_URL` — use ngrok, Cloudflare Tunnel, etc. (see README §14–§15) |
+| **Redis** | Optional; default is in-process jobs | Set `QUEUE_DRIVER=redis` and `REDIS_URL` only when testing Bull locally (install Redis on the host or use a hosted instance) |
 
-There is **no** “local Postgres only” mode: the backend loads `backend/src/config/database.js`, which **requires** `SUPABASE_URL` and `SUPABASE_SERVICE_KEY` and exits if they are missing. A bundled Postgres container does **not** replace Supabase for this codebase.
+There is **no** “local Postgres only” mode: the backend loads `backend/src/config/database.js`, which **requires** `SUPABASE_URL` and `SUPABASE_SERVICE_KEY` and exits if they are missing.
 
-## 2. First-time setup (host, not Docker)
+## 2. First-time setup
 
 ```bash
 git clone <repo-url> ai-code-review
@@ -60,25 +62,17 @@ This makes **LAN or phone-on-WiFi** testing easier: open the dashboard at `http:
 
 **Remaining edge cases**: IPv6 ULAs (`fc00::/7`), link-local (`fe80::/10`), or public IPs are not auto-allowed; add them to **`FRONTEND_DEV_EXTRA_ORIGINS`** or **`FRONTEND_URL`** as appropriate.
 
-## 3. Docker Compose
-
-`docker-compose.yml` starts **backend** and **frontend** dev servers with the same **in-process** job queue as `npm run dev` on the host (no Redis). You still need valid **Supabase** credentials in `backend/.env`.
-
-- **`env_file` with `required: false`**: requires **Docker Compose v2.24+**. Older Compose: create empty `backend/.env` / `frontend/.env` after copying from `.env.example`, or upgrade Docker Desktop / the Compose plugin.
-- Bind mounts hide image `node_modules`; services run `npm ci` before `npm run dev` so devDependencies (e.g. nodemon, Vite) are present.
-- Optional **`docker compose --profile redis up`**: starts Redis; set `QUEUE_DRIVER=redis` and `REDIS_URL=redis://redis:6379` in `backend/.env` to mirror production queuing.
-
-## 4. Scripts that exist vs removed
+## 3. Scripts that exist vs removed
 
 | Script | Status |
 |--------|--------|
 | `npm run verify:setup` (repo root) | Checks Node version and minimal env; **warnings** for OAuth/webhook gaps |
 | `backend` `db:migrate` / `db:seed` | **Removed** — they pointed at non-existent files; schema is applied via Supabase SQL editor and optional files under `backend/migrations/` |
 
-## 5. CI parity
+## 4. CI parity
 
 GitHub Actions uses Node **20** and `npm ci` in `frontend/` and `backend/`. Match that locally to avoid “works on my machine” drift.
 
-## 6. Security checklist (short)
+## 5. Security checklist (short)
 
 See [SECURITY.md](../SECURITY.md). Never commit `.env` files; never expose `SUPABASE_SERVICE_KEY` or `GITHUB_CLIENT_SECRET` to the frontend (no `VITE_SUPABASE_SERVICE_KEY`). Optional public OAuth id: `VITE_GITHUB_CLIENT_ID`. Set `TOKEN_ENCRYPTION_KEY_CURRENT` in `backend/.env`.

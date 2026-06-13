@@ -4,12 +4,17 @@ const isProduction = process.env.NODE_ENV === 'production';
 
 /** Dev: generous limits for HMR, React Query refetch, and rapid UI iteration. Prod: tighter defaults unless env overrides. */
 const defaultRateLimitWindowMs = isProduction ? 15 * 60 * 1000 : 30 * 60 * 1000;
-const defaultRateLimitMax = isProduction ? 100 : 10_000;
+const defaultRateLimitMax = isProduction ? 300 : 10_000;
+
+const STATIC_ASSET_EXT = /\.(css|js|mjs|map|svg|png|jpe?g|gif|webp|ico|woff2?|ttf|eot)$/i;
 
 /** GitHub webhook delivery bursts must not consume the global quota (would drop pushes). Health probes must remain cheap. */
 const skipWebhookAndProbeTraffic = (req) => {
-  const path = String(req.originalUrl || req.url || '');
-  return path.startsWith('/api/webhooks') || path === '/health' || path.startsWith('/health?');
+  const path = String(req.originalUrl || req.url || '').split('?')[0];
+  if (path.startsWith('/api/webhooks') || path === '/health') return true;
+  if (path.startsWith('/assets/')) return true;
+  if (STATIC_ASSET_EXT.test(path)) return true;
+  return false;
 };
 
 const rateLimiter = rateLimit({

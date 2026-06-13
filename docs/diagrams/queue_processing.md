@@ -1,5 +1,7 @@
 # Diagram: Review job processing (queue / worker)
 
+Part of [ARCHITECTURE.md](../ARCHITECTURE.md) §7. Related: [webhook_flow.md](webhook_flow.md), [socket_io_flow.md](socket_io_flow.md).
+
 Textual overview:
 
 1. **Enqueue:** `enqueueAnalyzeJob({ reviewId, repositoryId, userId, ... })` is called from webhook or manual review routes.

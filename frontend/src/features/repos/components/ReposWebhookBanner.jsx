@@ -16,7 +16,7 @@ export function ReposWebhookBanner({
         <p className="mt-1 text-xs leading-relaxed text-amber-100/90">
           Webhooks register when GitHub gets a reachable <strong>BACKEND_URL</strong>, or use the installer below (no disconnect
           needed). Your tunnel must forward to <strong>the same PORT</strong> as the API (often 3001). See{' '}
-          <strong>WEBHOOK_QUICKSTART.md</strong> at the repo root.
+          <strong>README §15</strong>.
         </p>
       </div>
       <button

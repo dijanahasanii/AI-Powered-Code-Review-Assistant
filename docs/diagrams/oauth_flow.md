@@ -1,5 +1,7 @@
 # Diagram: GitHub OAuth (browser login)
 
+Part of [ARCHITECTURE.md](../ARCHITECTURE.md) — authentication boundary. See [data_flow.md](data_flow.md) for connect-repo flow.
+
 **Primary path:** the SPA sends the browser to **`GET {API}/api/auth/github`**, which redirects to GitHub with **`client_id`**, **`redirect_uri`**, **`scope`**, and a signed **`state`** (CSRF mitigation). GitHub returns to **`{SPA}/auth/callback?code=…&state=…`**. The SPA exchanges the code via **`GET /api/auth/github/callback`** with the same **`state`**, **`code`**, and **`redirect_uri`** (see `frontend/src/api/client.js`).
 
 Textual flow (happy path):
