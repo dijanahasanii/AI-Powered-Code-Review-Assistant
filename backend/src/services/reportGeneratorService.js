@@ -216,6 +216,52 @@ async function readReportMarkdown(reportPath) {
   return fs.readFile(absolutePath, 'utf8');
 }
 
+/**
+ * Rebuild markdown from Supabase when the on-disk file is missing (ephemeral hosting / redeploy).
+ * @param {object} report - analysis_reports row (review_id, repository_name, etc.)
+ */
+async function regenerateReportMarkdownFromDb(report) {
+  const analysis = await buildAnalysisPayloadForReview(report.review_id);
+  const markdown = buildMarkdownReport({
+    repositoryName: report.repository_name,
+    branch: report.analyzed_branch,
+    commitSha: report.commit_sha,
+    generatedAt: report.created_at || new Date().toISOString(),
+    analysisType: report.analysis_type || inferAnalysisType(analysis.issues),
+    issues: analysis.issues,
+    summary: analysis.summary,
+    overallScore: analysis.overallScore,
+    remediationStatus: report.remediation_status,
+  });
+
+  const absolutePath =
+    resolveReportAbsolutePath(report.report_path) ||
+    path.join(REPORTS_DIR, `${report.review_id}.md`);
+  try {
+    await ensureReportsDir();
+    await fs.writeFile(absolutePath, markdown, 'utf8');
+  } catch (writeErr) {
+    logger.warn(`regenerateReportMarkdownFromDb: could not rewrite file: ${writeErr.message}`);
+  }
+
+  return markdown;
+}
+
+/**
+ * Read persisted markdown, or rebuild from DB if the file was lost (Railway ephemeral disk).
+ */
+async function readOrRegenerateReportMarkdown(report) {
+  try {
+    return await readReportMarkdown(report.report_path);
+  } catch (err) {
+    if (err?.code !== 'ENOENT') throw err;
+    logger.warn(
+      `Report file missing on disk (${report.report_path}) — regenerating from database for review ${report.review_id}`
+    );
+    return regenerateReportMarkdownFromDb(report);
+  }
+}
+
 function resolveReportAbsolutePath(reportPath) {
   const relative = String(reportPath || '').replace(/^reports[/\\]/, '');
   if (!relative) return null;
@@ -394,6 +440,8 @@ module.exports = {
   buildMarkdownReport,
   generateAndPersistReport,
   readReportMarkdown,
+  readOrRegenerateReportMarkdown,
+  regenerateReportMarkdownFromDb,
   deleteReportsForRepository,
   loadReviewIssues,
   buildAnalysisPayloadForReview,

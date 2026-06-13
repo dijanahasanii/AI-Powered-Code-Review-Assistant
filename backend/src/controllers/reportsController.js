@@ -2,7 +2,7 @@ const { AppError } = require('../middleware/errorHandler');
 const { logger } = require('../utils/logger');
 const reportsRepository = require('../repositories/reportsRepository');
 const {
-  readReportMarkdown,
+  readOrRegenerateReportMarkdown,
   ensureMissingReportsForUser,
 } = require('../services/reportGeneratorService');
 const { enqueueRemediationJob } = require('../services/remediationQueue');
@@ -107,7 +107,7 @@ const getReportMarkdown = async (req, res, next) => {
       throw new AppError('Forbidden', 403);
     }
 
-    const markdown = await readReportMarkdown(report.report_path);
+    const markdown = await readOrRegenerateReportMarkdown(report);
     res.json({ success: true, data: { markdown } });
   } catch (err) {
     if (err.code === 'ENOENT') {
