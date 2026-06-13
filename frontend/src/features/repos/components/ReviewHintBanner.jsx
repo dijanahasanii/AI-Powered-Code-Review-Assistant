@@ -8,10 +8,10 @@ export function ReviewHintBanner({ hint }) {
       className={clsx(
         'mb-4 rounded-md border px-4 py-3 text-sm',
         hint.tone === 'error'
-          ? 'border-red-500/30 bg-red-500/10 text-red-200'
+          ? 'border-red-600/30 bg-red-500/10 text-red-950 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200'
           : hint.tone === 'info'
-            ? 'border-amber-500/30 bg-amber-500/10 text-amber-100'
-            : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-100'
+            ? 'border-amber-600/30 bg-amber-500/[0.12] text-amber-950 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100'
+            : 'border-emerald-600/30 bg-emerald-500/[0.14] text-emerald-950 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-100'
       )}
     >
       <p>{hint.text}</p>
