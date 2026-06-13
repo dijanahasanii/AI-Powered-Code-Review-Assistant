@@ -9,11 +9,22 @@ RUN npm run build
 
 # ── Stage 2: production API + static SPA ─────────────────────────────────────
 FROM node:20-alpine
+
 WORKDIR /app/backend
+
 ENV NODE_ENV=production
+
+# Install git and openssh (required for auto-remediation)
+RUN apk add --no-cache git openssh
+
 COPY backend/package.json backend/package-lock.json ./
+
 RUN npm ci --omit=dev
+
 COPY backend/ ./
+
 COPY --from=frontend-build /app/frontend/dist /app/frontend/dist
+
 EXPOSE 3001
+
 CMD ["node", "src/server.js"]
