@@ -30,7 +30,7 @@ export default function LoginPage() {
               {authError}
             </p>
           )}
-          {!import.meta.env.VITE_GITHUB_CLIENT_ID && (
+          {import.meta.env.DEV && !import.meta.env.VITE_GITHUB_CLIENT_ID && (
             <p className="text-xs text-amber-400 text-center">
               Optional: VITE_GITHUB_CLIENT_ID — login uses the API with server-side OAuth; keep backend{' '}
               <code className="text-amber-900 dark:text-amber-200">GITHUB_CLIENT_*</code> aligned with your GitHub App.
