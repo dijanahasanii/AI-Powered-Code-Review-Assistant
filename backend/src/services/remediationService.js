@@ -11,6 +11,7 @@ const reportsRepository = require('../repositories/reportsRepository');
 const { loadReviewIssues } = require('./reportGeneratorService');
 const { applyFixesToFiles } = require('./targetedFixService');
 const { logger } = require('../utils/logger');
+const { supabase } = require('../config/database');
 const {
   isAutoRemediationEnabled,
   AUTO_REMEDIATION_DISABLED_MESSAGE,
@@ -96,6 +97,12 @@ async function runValidation(repoDir, logParts) {
 function appendPushFailureHints(logParts, err) {
   const detail = String(err?.message || err || '');
   appendLog(logParts, `Push failed: ${detail.slice(0, 1500)}`);
+  if (/Committer identity unknown|user\.email|user\.name/i.test(detail)) {
+    appendLog(
+      logParts,
+      'Hint: set REMEDIATION_GIT_USER_NAME and REMEDIATION_GIT_USER_EMAIL on the server (or redeploy with the latest fix).'
+    );
+  }
   if (/403|permission|denied|write access/i.test(detail)) {
     appendLog(
       logParts,
@@ -111,6 +118,42 @@ function appendPushFailureHints(logParts, err) {
   if (/could not read Username|authentication|401/i.test(detail)) {
     appendLog(logParts, 'Hint: GitHub token may be expired — reconnect your GitHub account in Settings.');
   }
+}
+
+/**
+ * Git requires user.name + user.email in each repo (Railway/Docker have none by default).
+ */
+async function configureRemediationGitIdentity(repoGit, userId, logParts) {
+  const envName = (process.env.REMEDIATION_GIT_USER_NAME || '').trim();
+  const envEmail = (process.env.REMEDIATION_GIT_USER_EMAIL || '').trim();
+  let gitName = envName;
+  let gitEmail = envEmail;
+
+  if (!gitName || !gitEmail) {
+    const { data: user } = await supabase
+      .from('users')
+      .select('username, github_id, email')
+      .eq('id', userId)
+      .single();
+
+    if (!gitName) {
+      gitName = user?.username ? `${user.username} (via AI Review)` : 'AI Code Review';
+    }
+    if (!gitEmail) {
+      if (user?.github_id && user?.username) {
+        gitEmail = `${user.github_id}+${user.username}@users.noreply.github.com`;
+      } else if (user?.email) {
+        gitEmail = user.email;
+      } else {
+        gitEmail = 'ai-review@users.noreply.github.com';
+      }
+    }
+  }
+
+  await repoGit.addConfig('user.name', gitName, false, 'local');
+  await repoGit.addConfig('user.email', gitEmail, false, 'local');
+  appendLog(logParts, `Git commit identity: ${gitName} <${gitEmail}>`);
+  return { gitName, gitEmail };
 }
 
 async function resolveRemediationBranch(report, repoFullName, userId, logParts) {
@@ -206,6 +249,7 @@ async function runRemediation({ reportId, userId, repoFullName }) {
     }
 
     const repoGit = simpleGit(repoDir);
+    await configureRemediationGitIdentity(repoGit, userId, logParts);
     appendLog(logParts, `On branch ${branch}, pulling latest...`);
     try {
       await repoGit.pull('origin', branch);
@@ -264,9 +308,7 @@ async function runRemediation({ reportId, userId, repoFullName }) {
       throw new Error('No file changes to commit after applying fixes');
     }
 
-    await repoGit.commit('fix(ai): resolve analyzer findings', {
-      '--author': 'AI Code Review <ai-review@local>',
-    });
+    await repoGit.commit('fix(ai): resolve analyzer findings');
     appendLog(logParts, 'Committed changes locally');
 
     try {

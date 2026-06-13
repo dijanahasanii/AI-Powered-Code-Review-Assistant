@@ -17,6 +17,9 @@ ENV NODE_ENV=production
 # Install git and openssh (required for auto-remediation)
 RUN apk add --no-cache git openssh
 
+RUN git config --global user.name "AI Code Review Assistant" && \
+    git config --global user.email "bot@ai-review.app"
+
 COPY backend/package.json backend/package-lock.json ./
 
 RUN npm ci --omit=dev
