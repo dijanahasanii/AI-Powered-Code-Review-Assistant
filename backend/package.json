@@ -14,7 +14,7 @@
     "db:backfill:reports": "node scripts/backfill-analysis-reports.js"
   },
   "dependencies": {
-    "@octokit/rest": "^20.1.1",
+    "@octokit/rest": "^22.0.1",
     "@supabase/supabase-js": "^2.39.3",
     "axios": "^1.6.5",
     "bull": "^4.12.2",
